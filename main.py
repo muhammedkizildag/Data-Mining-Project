@@ -67,9 +67,15 @@ results_df = pd.DataFrame(results)
 print(results_df)
 
 # Görselleştirme: Hata Matrisi
-cm = confusion_matrix(y_test, y_pred)
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-plt.title('Hata Matrisi - Naive Bayes')
-plt.ylabel('Gerçek Değer')
-plt.xlabel('Tahmin Edilen')
-plt.show()
+# Her iki model için ayrı ayrı hata matrisi çizdirmek için döngüyü kullanın
+for name, model in models.items():
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    
+    plt.figure(figsize=(6,4))
+    cm = confusion_matrix(y_test, y_pred)
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+    plt.title(f'Hata Matrisi - {name}') # Dinamik başlık (KNN veya Naive Bayes)
+    plt.ylabel('Gerçek Değer')
+    plt.xlabel('Tahmin Edilen')
+    plt.show()
