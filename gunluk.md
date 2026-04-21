@@ -1,0 +1,1016 @@
+# Proje Günlüğü — Öğrenci Başarı Tahmini (Veri Madenciliği)
+
+## Proje Tanımı
+
+Bu proje, veri madenciliği dersi kapsamında geliştirilen bir ödev projesidir. Amaç, öğrencilerin akademik verilerine, yaşam alışkanlıklarına ve demografik bilgilerine dayalı olarak başarı durumlarını tahmin eden bir sınıflandırma modeli oluşturmaktır.
+
+Projenin nihai hedefi sadece bir model değil, aynı zamanda öğrencilerin etkileşime geçebileceği bir **chatbot** arayüzü sunmaktır.
+
+---
+
+## Başlangıç Durumu
+
+Projede daha önce bir ödev kapsamında yazılmış iki Python dosyası mevcuttu:
+
+- **main.py** — UCI Student Performance veri seti üzerinde kNN ve Naive Bayes ile geçti/kaldı (binary) sınıflandırması
+- **dropout.py** — Öğrenci terk veri seti üzerinde 3 sınıflı (Dropout/Enrolled/Graduate) sınıflandırma
+
+Bu dosyalar öncül çalışmalardı ve bağlayıcı değildi. Proje sıfırdan şekillendirildi.
+
+---
+
+## Veri Seti Araştırması
+
+### Araştırma Süreci
+
+Kaggle, UCI ML Repository ve diğer açık veri kaynaklarında "student dropout prediction", "student academic success", "student performance prediction" gibi terimlerle kapsamlı bir araştırma yapıldı. Toplamda 9 aday veri seti belirlendi.
+
+### Değerlendirilen Veri Setleri
+
+| # | Veri Seti | Satır | Sütun | Hedef Değişken | Kaynak |
+|---|-----------|-------|-------|----------------|--------|
+| 1 | UCI Predict Students' Dropout and Academic Success | 4.424 | 37 | Target (Dropout/Enrolled/Graduate) | UCI + Kaggle |
+| 2 | Open University Learning Analytics Dataset (OULAD) | 32.593 | 7 tablo | final_result (Pass/Fail/Withdrawn/Distinction) | Open University |
+| 3 | UCI Student Performance | 649 | 33 | G3 (sınav notu) | UCI + Kaggle |
+| 4 | Student Performance Factors | 6.607 | 20 | Exam_Score (sürekli) | Kaggle |
+| 5 | Student Performance & Behavior | 14.003 | 16 | ExamScore/FinalGrade | Zenodo + Kaggle |
+| 6 | Student Habits vs Academic Performance | 1.000 | 16 | exam_score (sürekli) | Kaggle |
+| 7 | xAPI-Edu-Data | 480 | 17 | Class (L/M/H) | Kaggle |
+| 8 | Student Depression Dataset | 27.901 | 13 | Depression (binary) | Kaggle |
+| 9 | Student Stress Factors | 1.100 | 21 | stress_level (3 sınıf) | Kaggle |
+
+### Tüm Veri Setleri Repoya İndirildi
+
+Değerlendirme yapabilmek için uygun görülen tüm veri setleri `datasets/` klasörüne indirildi. UCI veri setleri doğrudan, Kaggle veri setleri API üzerinden çekildi.
+
+---
+
+## Veri Seti Seçim Süreci
+
+### İlk Tercih: Performance Factors (6.607 satır)
+
+Başlangıçta **Student Performance Factors** veri seti birincil olarak seçildi. Nedenleri:
+- 6.607 satır ile yeterli büyüklük
+- Çalışma saati, motivasyon, uyku, fiziksel aktivite gibi zengin özellikler
+- Hem sayısal hem kategorik değişkenler
+- Az eksik veri (%1 civarı)
+
+### Kritik Sorun: Not Dağılımı
+
+Veri seti incelendiğinde ciddi bir sorun ortaya çıktı: `Exam_Score` değişkeninin dağılımı **çok dar bir aralıkta yoğunlaşmıştı**. Notların büyük çoğunluğu 65-69 arasında sıkışmıştı (standart sapma sadece 3.9).
+
+Bu durum 3 sınıflı sınıflandırmayı anlamsız kıldı:
+
+| Eşik Denemesi | Düşük | Orta | Yüksek | Sonuç |
+|---------------|-------|------|--------|-------|
+| <60 / 60-79 / ≥80 | %2.2 | %97.1 | %0.7 | Kullanılamaz — tek sınıf |
+| <65 / 65-79 / ≥80 | %32.3 | %67.0 | %0.7 | Yüksek sınıf boş |
+| Quantile (eşit dağılım) | %43.6 | %31.8 | %24.6 | En dengeli ama Orta sınıf sadece 67-69 arası (3 puanlık aralık) |
+
+**Karar:** 67-69 gibi 3 puanlık bir aralığa "Orta" demek gerçek hayatta anlamsızdı. Veri seti sınıflandırma problemine uygun değildi.
+
+### Alternatif Arayışı
+
+Diğer veri setlerinin hedef değişken dağılımları karşılaştırıldı:
+
+| Veri Seti | Dağılım | Uygunluk |
+|-----------|---------|----------|
+| Performance Factors | Std: 3.9 — çok dar | ❌ Kötü |
+| Student Habits | Std: 16.9 — geniş yayılım (18-100) | ✅ Çok iyi |
+| Dropout UCI | Zaten 3 sınıf hazır | ✅ Çok iyi |
+| Stress Factors | Mükemmel denge (33/33/33) | ✅ İyi |
+
+### Nihai Seçim: İki Veri Seti
+
+**1. Student Habits vs Academic Performance (1.000 satır, 16 sütun)**
+- Geniş not yayılımı (18.4 - 100)
+- Psikolojik özellikler: mental_health_rating, sleep_hours
+- Modern yaşam alışkanlıkları: social_media_hours, netflix_hours
+- Projenin yaşam tarzı/psikolojik boyutunu temsil ediyor
+
+**2. UCI Predict Students' Dropout and Academic Success (4.424 satır, 37 sütun)**
+- Hedef değişken zaten 3 sınıf (Dropout/Enrolled/Graduate)
+- Büyük ve temiz veri (eksik veri yok)
+- Akademik performans verileri zengin (dönemlik ders notları, kredi sayıları)
+- Projenin akademik boyutunu temsil ediyor
+
+**İki veri seti eşit ağırlıkta** kullanılacak. Biri yaşam tarzı odaklı, diğeri akademik odaklı — "iki farklı bakış açısından öğrenci başarısı" hikayesi anlatılacak.
+
+### Birden Fazla Veri Setini Birleştirme Fikri
+
+Tüm veri setlerini birleştirip tek bir zengin veri seti oluşturma fikri değerlendirildi. **Reddedildi** çünkü:
+- Veri setlerindeki satırlar farklı öğrencilere ait
+- Aralarında eşleştirme yapacak ortak kimlik (ID) yok
+- Farklı ülkelerden, farklı zamanlarda toplanmış
+- Rastgele birleştirme sahte korelasyonlar üretir — bilimsel olarak geçersiz
+
+### Elenen Veri Setleri
+
+Repoya indirildikten sonra şu veri setleri silindi:
+
+| Veri Seti | Eleme Sebebi |
+|-----------|-------------|
+| **Performance Factors (6.607)** | Not dağılımı çok dar (std=3.9), sınıflandırmaya uygun değil |
+| **xAPI-Edu-Data (480)** | Sadece 480 satır, proje için çok küçük |
+| **Student Perf & Behavior (5.000)** | Grade dağılımı çok dengesiz (A: %0.3), Parent_Education_Level %20.5 eksik veri |
+
+### Belirsiz (Yedek) Olarak Tutulanlar
+
+| Veri Seti | Tutulma Sebebi |
+|-----------|---------------|
+| Student Stress Factors (1.100) | Mükemmel sınıf dengesi, psikolojik özellikler zengin |
+| Student Depression (27.901) | Büyük veri seti, ileride işe yarayabilir |
+| student/ klasörü (UCI orijinal) | Zaten mevcut, küçük yer kaplıyor |
+
+---
+
+## Problem Tanımlama
+
+### Hedef Değişken Kararları
+
+**Student Habits — 3 sınıf:**
+- Düşük: exam_score < 50
+- Orta: exam_score 50-75
+- Yüksek: exam_score > 75
+- Dağılım: Düşük %13.1 / Orta %49.2 / Yüksek %37.7
+
+Bu eşikler, not dağılımının geniş yayılımı sayesinde doğal ve anlamlı sınıflar oluşturuyor.
+
+**Dropout UCI — 3 sınıf (hazır):**
+- Dropout (Terk): 1.421 (%32.1)
+- Enrolled (Hâlâ kayıtlı): 794 (%17.9)
+- Graduate (Mezun): 2.209 (%49.9)
+
+### Enrolled Sınıfı Tartışması
+
+Enrolled öğrencilerin durumu belirsiz — ne mezun olmuşlar ne terk etmişler. Üç seçenek değerlendirildi:
+
+1. **3 sınıf olarak bırak** — Veri kaybı yok, iki veri seti de 3 sınıflı olur
+2. **Enrolled'u çıkar, binary yap** — Net sonuç ama 794 satır kaybı
+3. **Enrolled'u Dropout ile birleştir** — "Risk var" mantığı ama haksızlık olabilir
+
+**Karar: 3 sınıf olarak bırakıldı.** Hem Student Habits ile paralel olması hem veri kaybı olmaması hem de "devam eden risk grubu" olarak yorumlanabilmesi sebebiyle.
+
+---
+
+## EDA (Keşifsel Veri Analizi)
+
+### Student Habits — Bulgular
+
+**Korelasyon analizi (exam_score ile):**
+- `study_hours_per_day`: r=+0.83 — **çok güçlü pozitif** (baskın özellik)
+- `mental_health_rating`: r=+0.32 — orta pozitif
+- `exercise_frequency`: r=+0.16 — zayıf pozitif
+- `sleep_hours`: r=+0.12 — zayıf pozitif
+- `social_media_hours`: r=-0.17 — zayıf negatif
+- `netflix_hours`: r=-0.17 — zayıf negatif
+- `age`: r=-0.01 — ilişki yok
+
+**Risk grupları arası farklar:**
+- Düşük risk grubu: ortalama 1.62 saat/gün çalışma
+- Yüksek risk grubu: ortalama 4.75 saat/gün çalışma
+- Mental health: Düşük grupta 3.85, Yüksek grupta 6.41
+
+**Eksik veri:** `parental_education_level` — 91 satır (%9.1)
+
+**Kategorik değişken dağılımları:**
+- Cinsiyet: Female %48.1 / Male %47.7 / Other %4.2
+- Yarı zamanlı iş: Hayır %78.5 / Evet %21.5
+- Ders dışı aktivite: Hayır %68.2 / Evet %31.8
+
+### Dropout UCI — Bulgular
+
+**En güçlü korelasyonlar (Target ile):**
+- 2. dönem onaylanan dersler: r=+0.62 (en güçlü)
+- 2. dönem not ortalaması: r=+0.57
+- 1. dönem onaylanan dersler: r=+0.53
+- 1. dönem not ortalaması: r=+0.49
+- Harç ödeme durumu: r=+0.41
+
+**Target grupları arası farklar:**
+- Dropout öğrencileri: daha yaşlı (ort 26), çok az ders geçmiş (1. dönem ort 2.55), düşük notlar
+- Graduate öğrencileri: daha genç (ort 22), çok ders geçmiş (1. dönem ort 6.23), yüksek notlar
+- Ekonomik göstergeler (işsizlik, enflasyon, GDP): hedefle zayıf ilişkili
+
+**Eksik veri:** Yok
+
+EDA grafikleri `eda/plots_habits/` (8 grafik) ve `eda/plots_dropout/` (7 grafik) klasörlerine kaydedildi.
+
+---
+
+## Veri Ön İşleme
+
+### Student Habits
+
+| Adım | Yapılan İşlem |
+|------|--------------|
+| Gereksiz sütun | `student_id` çıkarıldı |
+| Hedef değişken | exam_score → risk_level (3 sınıf: 0=Düşük, 1=Orta, 2=Yüksek) |
+| Eksik veri | `parental_education_level` → mod (en sık değer: "High School") ile dolduruldu |
+| Encoding | 6 kategorik sütun LabelEncoder ile sayısallaştırıldı |
+| Normalizasyon | MinMaxScaler (tüm değerler 0-1 arasına) |
+| Feature Selection | Mutual Information analizi yapıldı. study_hours_per_day baskın (MI=0.37), çoğu özellik çok düşük MI skorlu. Tüm özellikler tutuldu |
+| Çıktı | 1.000 satır × 15 sütun → `preprocessing/habits_processed.csv` |
+
+### Dropout UCI
+
+| Adım | Yapılan İşlem |
+|------|--------------|
+| Eksik veri | Yok |
+| Hedef değişken | Target → LabelEncoder (Dropout=0, Enrolled=1, Graduate=2) |
+| Normalizasyon | MinMaxScaler (tüm değerler 0-1 arasına) |
+| Feature Selection | 36 özellikten MI < 0.01 olan 11 tanesi çıkarıldı → 25 özellik kaldı |
+| Çıkarılan özellikler | Curricular units 1st sem (credited), Unemployment rate, Educational special needs, Daytime/evening attendance, International, Curricular units 1st/2nd sem (without evaluations), Curricular units 2nd sem (credited), Displaced, Nacionality, GDP |
+| Çıktı | 4.424 satır × 26 sütun → `preprocessing/dropout_processed.csv` |
+
+---
+
+## Algoritma Seçimi
+
+### Seçim Kriterleri
+
+1. **Problem tipi:** Sınıflandırma → regresyon algoritmaları elendi
+2. **Veri boyutu:** 1.000-4.424 satır, orta ölçek → deep learning gereksiz
+3. **Özellik yapısı:** Hem sayısal hem kategorik → her ikisini de işleyebilen algoritmalar
+4. **Farklı yaklaşımlar:** Ders gereği farklı paradigmalardan algoritmalar seçilmeli
+
+### Seçilen 4 Algoritma
+
+| Algoritma | Yaklaşım | Seçilme Sebebi |
+|-----------|----------|---------------|
+| **kNN** | Mesafe tabanlı | En basit ve sezgisel. Baseline model. Normalize veriyle iyi çalışır |
+| **Naive Bayes** | Olasılık tabanlı | Farklı bir mantık. Küçük veri setlerinde iyi. Hızlı |
+| **Decision Tree** | Kural tabanlı | Yorumlanabilirlik yüksek. Feature importance verir. Görselleştirme güçlü |
+| **Random Forest** | Ensemble (topluluk) | Genelde en yüksek doğruluk. Overfitting'e dayanıklı. Decision Tree'nin güçlendirilmiş hali |
+
+### Değerlendirilip Seçilmeyen Algoritmalar
+
+| Algoritma | Seçilmeme Sebebi |
+|-----------|-----------------|
+| SVM | Güçlü ama "black box" — yorumlama zor, projede yorumlama önemli |
+| Logistic Regression | İkili sınıflandırmada daha doğal, 3 sınıf için biraz daha az uygun |
+| Neural Network / Deep Learning | 1.000-4.000 satır için overkill |
+| XGBoost / LightGBM | Çok güçlü ama ders seviyesinin üstünde, açıklaması zor |
+
+---
+
+## Chatbot Kararı
+
+Projenin son aşaması olarak bir chatbot planlandı. İki farklı yaklaşım değerlendirildi:
+
+**Reddedilen:** Genel sohbet chatbotu (ChatGPT wrapper). Veri madenciliğiyle bağlantısı yok.
+
+**Kabul edilen:** Modelle entegre tahmin chatbotu. Öğrenci sohbet ederek kendi verilerini girer, eğitilmiş model arka planda çalışır, kişiselleştirilmiş sonuç döner.
+
+Chatbot akışı:
+1. Soru sorarak model için gerekli özellikleri toplar
+2. Eğitilmiş model tahmin yapar
+3. Feature importance bilgisiyle kişiselleştirilmiş öneri üretir
+4. What-if analizi yapabilir ("çalışma saatimi artırsam?")
+
+Chatbot, projenin son aşaması olarak modelleme bittikten sonra gelecek.
+
+---
+
+## Proje Yapısı (Mevcut)
+
+```
+Data-Mining-Project/
+├── datasets/
+│   ├── dropout_academic_success/    → data.csv (4.424 satır, kullanılacak)
+│   ├── student_habits/              → student_habits_performance.csv (1.000 satır, kullanılacak)
+│   ├── student_stress_factors/      → StressLevelDataset.csv (yedek)
+│   └── student_depression/          → student_depression.csv (yedek)
+├── student/                         → UCI orijinal (student-mat.csv, student-por.csv)
+├── eda/
+│   ├── eda_habits.py                → Student Habits EDA kodu
+│   ├── eda_dropout.py               → Dropout UCI EDA kodu
+│   ├── plots_habits/                → 8 grafik
+│   └── plots_dropout/               → 7 grafik
+├── preprocessing/
+│   ├── preprocess_habits.py         → Student Habits ön işleme kodu
+│   ├── preprocess_dropout.py        → Dropout UCI ön işleme kodu
+│   ├── habits_processed.csv         → İşlenmiş veri
+│   └── dropout_processed.csv        → İşlenmiş veri
+├── modeling/
+│   ├── model_habits.py              → v1 modelleme (4 algoritma)
+│   ├── model_habits_v2.py           → v2 modelleme (SMOTE + FE + XGBoost)
+│   ├── model_dropout.py             → v1 modelleme (4 algoritma)
+│   ├── model_dropout_v2.py          → v2 modelleme (FE + XGBoost)
+│   ├── ablation_study.py            → Bireysel katkı analizi
+│   ├── plots_habits/                → v1 grafikleri
+│   ├── plots_habits_v2/             → v2 grafikleri
+│   ├── plots_dropout/               → v1 grafikleri
+│   └── plots_dropout_v2/            → v2 grafikleri
+├── models/
+│   ├── best_model_habits.pkl        → XGBoost (F1: %80.62)
+│   └── best_model_dropout.pkl       → XGBoost (F1: %77.26)
+├── main.py                          → Eski ödev kodu
+├── dropout.py                       → Eski ödev kodu
+├── requirements.txt                 → Bağımlılıklar
+└── .gitignore
+```
+
+---
+
+## Modelleme Planı
+
+### Modelleme Akışı (7 adım)
+
+Modelleme aşaması her iki veri seti için ayrı ayrı uygulanacak.
+
+**Adım 1 — Train/Test Split:**
+Veri %70 eğitim / %30 test olarak ayrılacak. Student Habits'te 1.000 satır olduğu için %30 test = 300 satır, yeterli güvenilirlik sağlar.
+
+**Adım 2 — Baseline Model (Varsayılan parametreler):**
+4 algoritma hiçbir ayar yapılmadan varsayılan parametrelerle çalıştırılacak. Amaç: referans nokta oluşturmak.
+- kNN: k=5
+- Naive Bayes: parametresiz
+- Decision Tree: sınırsız derinlik
+- Random Forest: 100 ağaç
+
+**Adım 3 — Hiperparametre Optimizasyonu (GridSearchCV):**
+Her modelin en iyi parametre kombinasyonu aranacak:
+- kNN → k değeri (1,3,5,7,9,11,13,15), mesafe metriği (euclidean, manhattan)
+- Naive Bayes → parametre yok
+- Decision Tree → max_depth (3,5,7,10,None), min_samples_split, min_samples_leaf
+- Random Forest → n_estimators (50,100,200), max_depth, min_samples_split
+
+**Adım 4 — 10-Fold Cross Validation:**
+En iyi parametrelerle bulunan modeller 10-Fold CV ile doğrulanacak. Eğitim verisini 10 parçaya böl, her seferinde 9'uyla eğit 1'iyle test et, ortalamasını al.
+
+**Adım 5 — Test Seti Değerlendirmesi:**
+%30 test verisi üzerinde final metrikleri: Accuracy, Precision, Recall, F1-Score, Confusion Matrix.
+
+**Adım 6 — Model Karşılaştırması:**
+4 modelin sonuçları yan yana tablo ve grafik ile karşılaştırılacak. En iyi model seçilip gerekçelendirilecek.
+
+**Adım 7 — En İyi Modeli Kaydet:**
+En yüksek performanslı model `.pkl` olarak kaydedilecek. Chatbot bu dosyayı kullanacak.
+
+### Akış Şeması
+
+```
+İşlenmiş Veri (.csv)
+        │
+        ▼
+  Train/Test Split (%70/%30)
+        │
+        ├──── Train (%70) → Baseline → GridSearchCV → 10-Fold CV
+        │
+        ├──── Test (%30) → Final Değerlendirme → Confusion Matrix
+        │
+        ▼
+  Karşılaştırma Tablosu → En İyi Model → .pkl kaydet
+```
+
+Bu süreç Student Habits ve Dropout UCI için ayrı ayrı uygulanacak. Sonunda iki veri setinin sonuçları da birbiriyle karşılaştırılacak.
+
+---
+
+## Mimari Kararı
+
+**Karar: Modüler monolitik yapı.** Mikroservis mimarisi değerlendirildi ve reddedildi.
+
+**Neden mikroservis değil:**
+- Proje tek makine, tek kullanıcı, tek amaç
+- Veri madenciliği ders ödevi ölçeğinde mimari karmaşıklık gereksiz
+- Servisler arası API iletişimi bu projede overhead
+
+**Neden monolitik çorba da değil:**
+- Her aşama kendi klasöründe ve dosyasında (eda/, preprocessing/, modeling/, chatbot/)
+- Her modül bağımsız çalışabilir (kendi csv'sini okur, kendi çıktısını üretir)
+- Tek bağlantı noktası: modeling → .pkl → chatbot
+- Herhangi bir aşama değiştirilse diğerleri bozulmaz
+
+---
+
+## Modelleme Sonuçları
+
+### Student Habits
+
+**Baseline (varsayılan parametreler):**
+
+| Model | Accuracy |
+|-------|----------|
+| kNN (k=5) | %53.67 |
+| Naive Bayes | %76.00 |
+| Decision Tree | %69.33 |
+| Random Forest | %76.33 |
+
+**Hiperparametre Optimizasyonu (GridSearchCV):**
+- kNN → En iyi: k=15, metric=manhattan (CV: %61.14)
+- Naive Bayes → Parametre yok
+- Decision Tree → En iyi: max_depth=7, min_samples_leaf=5 (CV: %73.57)
+- Random Forest → En iyi: n_estimators=200, max_depth=None (CV: %80.14)
+
+**10-Fold Cross Validation (optimize sonrası):**
+- kNN: %61.00 (±4.38)
+- Naive Bayes: %78.14 (±4.04)
+- Decision Tree: %72.57 (±4.51)
+- Random Forest: %79.00 (±4.83)
+
+**Test Seti Final Sonuçları:**
+
+| Model | Accuracy | Precision | Recall | F1-Score |
+|-------|----------|-----------|--------|----------|
+| kNN | %63.00 | %66.53 | %63.00 | %59.66 |
+| **Naive Bayes** | **%76.00** | **%77.99** | **%76.00** | **%75.19** |
+| Decision Tree | %68.33 | %68.23 | %68.33 | %68.22 |
+| Random Forest | %75.00 | %75.41 | %75.00 | %73.79 |
+
+**En iyi model: Naive Bayes (F1: %75.19)** → `models/best_model_habits.pkl`
+
+Dikkat çekici bulgu: Naive Bayes'in Random Forest'ı geçmesi. Bunun sebebi muhtemelen study_hours_per_day'in baskın özellik olması (r=0.83). Naive Bayes bu tür tek baskın özellikli veri setlerinde iyi çalışır çünkü özelliklerin bağımsız dağılımını iyi modeller.
+
+### Dropout UCI
+
+**Baseline (varsayılan parametreler):**
+
+| Model | Accuracy |
+|-------|----------|
+| kNN (k=5) | %66.94 |
+| Naive Bayes | %68.83 |
+| Decision Tree | %66.64 |
+| Random Forest | %77.64 |
+
+**Hiperparametre Optimizasyonu (GridSearchCV):**
+- kNN → En iyi: k=15, metric=manhattan (CV: %72.32)
+- Naive Bayes → Parametre yok
+- Decision Tree → En iyi: max_depth=5, min_samples_leaf=5 (CV: %74.26)
+- Random Forest → En iyi: n_estimators=50, max_depth=15, min_samples_split=10 (CV: %76.71)
+
+**10-Fold Cross Validation (optimize sonrası):**
+- kNN: %71.99 (±3.51)
+- Naive Bayes: %69.31 (±3.87)
+- Decision Tree: %74.13 (±3.25)
+- Random Forest: %77.03 (±2.53)
+
+**Test Seti Final Sonuçları:**
+
+| Model | Accuracy | Precision | Recall | F1-Score |
+|-------|----------|-----------|--------|----------|
+| kNN | %72.06 | %71.00 | %72.06 | %69.83 |
+| Naive Bayes | %68.83 | %66.33 | %68.83 | %66.91 |
+| Decision Tree | %74.40 | %72.10 | %74.40 | %71.57 |
+| **Random Forest** | **%77.79** | **%76.40** | **%77.79** | **%76.23** |
+
+**En iyi model: Random Forest (F1: %76.23)** → `models/best_model_dropout.pkl`
+
+Feature Importance (Random Forest - Dropout):
+- En önemli: 2. dönem onaylanan dersler, 2. dönem notları, 1. dönem onaylanan dersler
+- Orta önem: Harç ödeme, giriş notu, bölüm
+- Düşük önem: Medeni durum, cinsiyet, önceki yeterlilik
+
+### İki Veri Seti Karşılaştırması (v1)
+
+| | Student Habits | Dropout UCI |
+|---|---|---|
+| En iyi model | Naive Bayes | Random Forest |
+| En iyi F1 | %75.19 | %76.23 |
+| Veri boyutu | 1.000 satır | 4.424 satır |
+| Özellik sayısı | 14 | 25 |
+| Baskın özellik | study_hours_per_day (r=0.83) | Curricular units 2nd sem (approved) (r=0.62) |
+
+Farklı veri setlerinde farklı algoritmaların öne çıkması beklenen bir sonuç. Habits'te tek baskın özellik olduğu için Naive Bayes yeterli, Dropout'ta daha karmaşık ilişkiler olduğu için ensemble yöntemi (Random Forest) avantajlı.
+
+---
+
+## Modelleme v2 — İyileştirme (SMOTE + Feature Engineering + XGBoost)
+
+### Neden İyileştirme Yapıldı?
+
+v1 sonuçları (%75-76 F1) "iyi" kategorisindeydi ama daha yukarıya çıkma potansiyeli vardı. Üç iyileştirme uygulandı:
+
+### 1. SMOTE (Sadece Student Habits)
+
+Student Habits'te Düşük sınıf sadece %13 (92 eğitim örneği). Model bu sınıfı yeterince öğrenemiyordu.
+
+| | Düşük | Orta | Yüksek |
+|---|---|---|---|
+| SMOTE öncesi | 92 | 344 | 264 |
+| SMOTE sonrası | 344 | 344 | 344 |
+
+Dropout UCI'da uygulanmadı çünkü en küçük sınıf bile 794 öğrenci (%18) — yeterli denge.
+
+### 2. Feature Engineering
+
+**Student Habits — 7 yeni özellik:**
+- `study_social_ratio`: çalışma/sosyal medya oranı
+- `study_netflix_ratio`: çalışma/Netflix oranı
+- `screen_time_total`: toplam ekran süresi
+- `sleep_mental_interaction`: uyku × zihinsel sağlık
+- `study_mental_interaction`: çalışma × zihinsel sağlık
+- `healthy_lifestyle`: uyku + egzersiz + diyet
+- `study_attendance_interaction`: çalışma × devam
+
+**Dropout UCI — 8 yeni özellik:**
+- `sem1_success_rate`: 1. dönem ders geçme oranı
+- `sem2_success_rate`: 2. dönem ders geçme oranı
+- `total_approved`: toplam geçilen ders
+- `total_grade`: toplam not
+- `grade_improvement`: 2. dönem - 1. dönem not farkı
+- `approved_improvement`: 2. dönem - 1. dönem geçilen ders farkı
+- `eval_approved_ratio_1`: 1. dönem sınav/geçme oranı
+- `eval_approved_ratio_2`: 2. dönem sınav/geçme oranı
+
+### 3. XGBoost (5. Algoritma)
+
+4 algoritmanın yanına XGBoost eklendi. Daha önce "ders seviyesinin üstünde" diye elenmişti, ancak doğruluk artırmak için dahil edildi. XGBoost gradient boosting tabanlı bir ensemble yöntem, genelde Random Forest'ı geçer.
+
+### v2 Sonuçları — Student Habits
+
+| Model | Accuracy | Precision | Recall | F1-Score |
+|-------|----------|-----------|--------|----------|
+| kNN | %56.33 | %57.40 | %56.33 | %56.74 |
+| Naive Bayes | %67.33 | %71.47 | %67.33 | %68.20 |
+| Decision Tree | %65.00 | %65.23 | %65.00 | %65.03 |
+| Random Forest | %80.33 | %80.35 | %80.33 | %80.32 |
+| **XGBoost** | **%80.67** | **%80.67** | **%80.67** | **%80.62** |
+
+**En iyi: XGBoost (F1: %80.62)** — v1'e göre +5.43 puan iyileşme
+
+Hiperparametre: learning_rate=0.1, max_depth=3, n_estimators=300, subsample=0.8
+
+Not: kNN ve Naive Bayes SMOTE sonrası düştü çünkü SMOTE yapay verileri bu mesafe/olasılık tabanlı modelleri karıştırdı. Ama ağaç tabanlı modeller (DT, RF, XGB) büyük sıçrama yaptı.
+
+### v2 Sonuçları — Dropout UCI
+
+| Model | Accuracy | Precision | Recall | F1-Score |
+|-------|----------|-----------|--------|----------|
+| kNN | %74.77 | %73.43 | %74.77 | %73.72 |
+| Naive Bayes | %74.32 | %74.65 | %74.32 | %74.10 |
+| Decision Tree | %75.98 | %74.32 | %75.98 | %74.62 |
+| Random Forest | %77.71 | %76.46 | %77.71 | %76.64 |
+| **XGBoost** | **%78.01** | **%77.04** | **%78.01** | **%77.26** |
+
+**En iyi: XGBoost (F1: %77.26)** — v1'e göre +1.03 puan iyileşme
+
+Hiperparametre: learning_rate=0.1, max_depth=3, n_estimators=200, subsample=1.0
+
+### v1 vs v2 Genel Karşılaştırma
+
+| | v1 En İyi Model | v1 F1 | v2 En İyi Model | v2 F1 | İyileşme |
+|---|---|---|---|---|---|
+| Student Habits | Naive Bayes | %75.19 | XGBoost | %80.62 | **+5.43** |
+| Dropout UCI | Random Forest | %76.23 | XGBoost | %77.26 | **+1.03** |
+
+Habits'te büyük sıçrama oldu çünkü hem SMOTE (sınıf dengesi) hem feature engineering (yeni sinyaller) hem XGBoost birlikte etki etti. Dropout'ta artış daha mütevazı çünkü veri zaten dengeliydi ve v1'de Random Forest iyi performans gösteriyordu.
+
+Her iki veri setinde de XGBoost kazandı — bu beklenen bir sonuç, gradient boosting genelde diğer yöntemleri geçer.
+
+---
+
+## Ablation Study — Bireysel Katkı Analizi
+
+### Neden Yapıldı?
+
+v2'de %5.43 (Habits) ve %1.03 (Dropout) iyileşme sağlandı ama bu iyileşmenin ne kadarı XGBoost'tan, ne kadarı Feature Engineering'den, ne kadarı SMOTE'tan geldiği bilinmiyordu. Her iyileştirmenin bireysel etkisini ölçmek için ablation study yapıldı.
+
+### Yöntem
+
+Her iyileştirme tek tek açılıp kapatılarak 7 farklı senaryo (Habits) ve 4 farklı senaryo (Dropout) test edildi. Tüm senaryolarda aynı train/test split (70/30, random_state=42, stratified) kullanıldı. Ablation study'de GridSearchCV yapılmadı — sabit parametrelerle çalışıldı, böylece karşılaştırma adil oldu.
+
+### Student Habits — Sonuçlar
+
+| # | Senaryo | Kazanan Model | F1 | Fark (v1'e göre) |
+|---|---------|--------------|-----|-------------------|
+| 1 | Orijinal + 4 Algo (v1 referans) | Naive Bayes | %75.19 | — |
+| 2 | Orijinal + 5 Algo (+XGBoost) | XGBoost | %79.61 | **+4.42** |
+| 3 | FE + 4 Algo | Random Forest | %79.73 | **+4.54** |
+| 4 | SMOTE + Orijinal + 4 Algo | Random Forest | %77.68 | +2.49 |
+| 5 | FE + 5 Algo (SMOTE yok) | XGBoost | %79.89 | +4.70 |
+| 6 | SMOTE + Orijinal + 5 Algo | XGBoost | %79.66 | +4.47 |
+| 7 | SMOTE + FE + 5 Algo (v2) | XGBoost | %80.62 | **+5.43** |
+
+**Detaylı Tablo (Tüm modeller):**
+
+| Model | v1(Orig+4) | +XGB | +FE | +SMOTE | FE+XGB | SM+XGB | v2(All) |
+|-------|-----------|------|-----|--------|--------|--------|---------|
+| kNN | %59.66 | %59.66 | %67.57 | %45.81 | %67.57 | %45.81 | %59.81 |
+| Naive Bayes | %75.19 | %75.19 | %69.01 | %74.80 | %69.01 | %74.80 | %68.20 |
+| Decision Tree | %68.22 | %68.22 | %72.79 | %68.70 | %72.79 | %68.70 | %67.97 |
+| Random Forest | %73.79 | %73.79 | %79.73 | %77.68 | %79.73 | %77.68 | %79.69 |
+| XGBoost | — | %79.61 | — | — | %79.89 | %79.66 | %80.62 |
+
+**Bireysel Katkı Sıralaması:**
+1. **Feature Engineering: +4.54** — En yüksek bireysel katkı. Türetilmiş özellikler (çalışma/sosyal medya oranı vb.) modelin sınıfları ayırma gücünü artırdı.
+2. **XGBoost: +4.42** — Neredeyse FE kadar etkili. Gradient boosting diğer algoritmalardan belirgin şekilde güçlü.
+3. **SMOTE: +2.49** — En düşük bireysel katkı. Sınıf dengesi sağlandı ama etkisi diğer ikisinin yarısı kadar.
+
+**Önemli Bulgular:**
+- FE + XGBoost (SMOTE olmadan) %79.89 veriyor. SMOTE sadece son +0.73 puanı ekliyor (79.89 → 80.62).
+- SMOTE, kNN'i ciddi şekilde bozmuş (%59.66 → %45.81). Yapay veriler mesafe tabanlı modeli yanıltıyor.
+- Naive Bayes hem FE'den hem SMOTE'tan zarar görmüş. Tek baskın özellik (study_hours) ortamında ek özellikler gürültü yaratmış.
+- Ağaç tabanlı modeller (DT, RF, XGB) her iyileştirmeden fayda sağlamış.
+
+### Dropout UCI — Sonuçlar
+
+| # | Senaryo | Kazanan Model | F1 | Fark (v1'e göre) |
+|---|---------|--------------|-----|-------------------|
+| 1 | Orijinal + 4 Algo (v1 referans) | Random Forest | %76.38 | — |
+| 2 | Orijinal + 5 Algo (+XGBoost) | XGBoost | %77.94 | **+1.57** |
+| 3 | FE + 4 Algo | Random Forest | %75.70 | **-0.68** |
+| 4 | FE + 5 Algo (v2) | XGBoost | %77.26 | +0.88 |
+
+**Bireysel Katkı Sıralaması:**
+1. **XGBoost: +1.57** — Tek başına en iyi sonuç. Dropout verisinde ana iyileşme kaynağı.
+2. **Feature Engineering: -0.68** — Olumsuz etki! Türetilmiş özellikler gürültü eklemiş.
+
+**Önemli Bulgular:**
+- Dropout'ta Feature Engineering tek başına zararlı. Orijinal özellikler zaten güçlü sinyaller içeriyordu (2. dönem onaylanan dersler r=0.62). Ek özellikler fazla korelasyonlu ve gürültülü.
+- XGBoost tek başına (%77.94), FE + XGBoost'tan (%77.26) bile daha iyi. FE, XGBoost'un performansını da düşürmüş.
+- SMOTE zaten uygulanmadı çünkü sınıf dengesi yeterliydi (en küçük sınıf %18).
+
+### Genel Çıkarımlar
+
+| İyileştirme | Student Habits | Dropout UCI |
+|-------------|---------------|-------------|
+| XGBoost | +4.42 ✅ | +1.57 ✅ |
+| Feature Engineering | +4.54 ✅ | -0.68 ❌ |
+| SMOTE | +2.49 ✅ | Uygulanmadı |
+| Hepsi birlikte | +5.43 ✅ | +0.88 ✅ |
+
+- **XGBoost her iki veri setinde de pozitif katkı sağladı** — en güvenilir iyileştirme.
+- **Feature Engineering veri setine bağlı** — Habits'te çok faydalı, Dropout'ta zararlı. Her zaman "daha fazla özellik = daha iyi" değil.
+- **SMOTE marjinal katkı sağladı** — Düşük sınıf dengesini düzeltti ama bazı modelleri bozdu.
+- Üç iyileştirmenin toplamı, bireysel katkılarının toplamından düşük (sinerjik ama kısmen örtüşen etkiler).
+
+---
+
+## Veri Seti Değişikliği: Student Habits → OULAD
+
+### Neden Değiştirildi?
+
+Student Habits veri seti sentetik (yapay üretilmiş) veritiydi ve en iyi sonuç v2 ile %80.62 F1'de kaldı. Daha yüksek performans için gerçek bir veri seti arandı.
+
+### Araştırma Süreci
+
+10 farklı eğitim veri seti incelendi:
+
+| Veri Seti | Satır | Gerçek? | Uygun? | Neden? |
+|-----------|-------|---------|--------|--------|
+| **OULAD (Open University UK)** | **32.593** | **Evet** | **Seçildi** | Büyük, gerçek, Nature'da yayınlandı |
+| UCI Student Perf (Portekiz) | 395-649 | Evet | Hayır | Çok küçük |
+| xAPI-Edu-Data | 480 | Evet | Hayır | Çok küçük |
+| KDD Cup 2010 | Milyonlarca | Evet | Hayır | Farklı problem tipi |
+| Kıbrıs Higher Ed | 145 | Evet | Hayır | Çok küçük |
+| Oman Moodle | 326 | Evet | Hayır | Çok küçük |
+| Student Depression | 27.901 | Muhtemelen sentetik | Hayır | Binary, konu farklı |
+| Student Stress | 1.100 | Muhtemelen sentetik | Hayır | Sentetik |
+
+### OULAD (Open University Learning Analytics Dataset)
+
+- **Kaynak:** The Open University (İngiltere'nin en büyük üniversitesi)
+- **Yayın:** Kuzilek et al., Nature Scientific Data, 2017
+- **Boyut:** 32.593 öğrenci + 10.6M VLE etkileşim logu
+- **Yapı:** 7 ilişkisel CSV tablosu (studentInfo, assessments, studentAssessment, vle, studentVle, studentRegistration, courses)
+- **Orijinal hedef:** 4 sınıf (Pass %37.9, Withdrawn %31.2, Fail %21.6, Distinction %9.3)
+
+**3 sınıfa daraltma:**
+- Withdrawn: 10.156 (%31.2) — Terk edenler
+- Fail: 7.052 (%21.6) — Başarısız olanlar
+- Pass (+ Distinction): 15.385 (%47.2) — Başarılı olanlar
+
+Bu yapı Dropout UCI ile paralel: orada Dropout/Enrolled/Graduate, burada Withdrawn/Fail/Pass.
+
+### Veri Hazırlama (7 Tablo → 1 Dataset)
+
+7 ilişkisel tablo join edilerek öğrenci bazlı tek bir veri seti oluşturuldu:
+
+**Assessment özellikleri (15):**
+avg_score, std_score, min_score, max_score, num_assessments, num_missing_score, avg_score_TMA, num_TMA, avg_score_CMA, num_CMA, avg_score_Exam, num_Exam, avg_submit_delay, late_submissions, early_submissions
+
+**VLE davranış özellikleri (13):**
+total_clicks, total_vle_days, avg_daily_clicks, num_distinct_activities, clicks_resource, clicks_oucontent, clicks_url, clicks_forumng, clicks_quiz, clicks_subpage, clicks_homepage, clicks_questionnaire, clicks_page
+
+**Kayıt/ders özellikleri:**
+date_registration, unregistered, course_length, studied_credits
+
+**Demografik:**
+gender, region, highest_education, imd_band, age_band, disability, num_of_prev_attempts
+
+**Feature Selection (Mutual Information):**
+MI < 0.01 olan 9 özellik çıkarıldı: highest_education, imd_band, gender, num_of_prev_attempts, region, num_missing_score, course_length, disability, age_band
+
+**Final:** 32.593 satır × 30 özellik → `preprocessing/oulad_processed.csv`
+
+### EDA Bulguları
+
+**En güçlü korelasyonlar (target ile):**
+- unregistered: r=-0.89 (kayıt sildiren = withdrawn, çok güçlü)
+- num_TMA: r=+0.76
+- num_assessments: r=+0.75
+- max_score: r=+0.68
+- early_submissions: r=+0.67
+- avg_score: r=+0.65
+- total_vle_days: r=+0.62
+
+**VLE kullanım farkları:**
+- Pass öğrencileri: ort 2.069 tıklama, 92 aktif gün
+- Fail öğrencileri: ort 688 tıklama, 35 aktif gün
+- Withdrawn öğrencileri: ort 445 tıklama, 23 aktif gün
+
+Başarılı öğrenciler platformu 4.6 kat daha fazla kullanıyor — çok güçlü ayrıştırıcı sinyal.
+
+**Assessment not farkları:**
+- Pass: ort 79.1
+- Withdrawn: ort 66.1
+- Fail: ort 64.7
+
+EDA grafikleri: `eda/plots_oulad/` (6 grafik)
+
+---
+
+## OULAD Modelleme Sonuçları
+
+### v1 — 4 Algoritma
+
+**Hiperparametre Optimizasyonu (GridSearchCV):**
+- kNN → k=9, manhattan (CV F1: %93.84)
+- Naive Bayes → parametre yok (CV F1: %89.67)
+- Decision Tree → max_depth=10, min_samples_leaf=5 (CV F1: %92.92)
+- Random Forest → n_estimators=50, max_depth=None, min_samples_split=5 (CV F1: %94.41)
+
+**10-Fold CV:**
+- kNN: %93.89 (±0.54)
+- Naive Bayes: %89.73 (±0.75)
+- Decision Tree: %93.11 (±0.52)
+- Random Forest: %94.31 (±0.43)
+
+**Test Seti Sonuçları:**
+
+| Model | Accuracy | Precision | Recall | F1-Score |
+|-------|----------|-----------|--------|----------|
+| kNN | %93.59 | %93.60 | %93.59 | %93.46 |
+| Naive Bayes | %90.48 | %90.34 | %90.48 | %90.31 |
+| Decision Tree | %93.77 | %93.74 | %93.77 | %93.68 |
+| **Random Forest** | **%94.63** | **%94.62** | **%94.63** | **%94.56** |
+
+**En iyi: Random Forest (F1: %94.56)**
+
+### v2 — Feature Engineering + XGBoost
+
+**10 yeni türetilmiş özellik:**
+score_per_assessment, click_per_day, assessment_completion_rate, forum_ratio, quiz_ratio, resource_ratio, score_consistency, early_late_ratio, tma_cma_score_diff, engagement_score
+
+**Hiperparametre Optimizasyonu:**
+- XGBoost → learning_rate=0.05, max_depth=10, n_estimators=200, subsample=0.8 (CV F1: %94.85)
+
+**Test Seti Sonuçları:**
+
+| Model | Accuracy | Precision | Recall | F1-Score |
+|-------|----------|-----------|--------|----------|
+| kNN | %93.81 | %93.85 | %93.81 | %93.68 |
+| Naive Bayes | %90.61 | %90.50 | %90.61 | %90.38 |
+| Decision Tree | %92.80 | %92.75 | %92.80 | %92.68 |
+| Random Forest | %94.72 | %94.70 | %94.72 | %94.66 |
+| **XGBoost** | **%94.88** | **%94.86** | **%94.88** | **%94.82** |
+
+**En iyi: XGBoost (F1: %94.82)** → `models/best_model_oulad.pkl`
+
+### v1 vs v2:
+- v1: Random Forest F1: %94.56
+- v2: XGBoost F1: %94.82
+- İyileşme: +0.26 puan (v1 zaten çok yüksekti, artış marjinal)
+
+### OULAD Ablation Study
+
+| # | Senaryo | Kazanan | F1 | Fark |
+|---|---------|---------|-----|------|
+| 1 | Orijinal + 4 Algo (v1) | Random Forest | %94.56 | — |
+| 2 | Orijinal + 5 Algo (+XGB) | XGBoost | %94.76 | +0.20 |
+| 3 | FE + 4 Algo | Random Forest | %94.47 | -0.09 |
+| 4 | FE + 5 Algo (v2) | XGBoost | %94.82 | +0.26 |
+
+**Bulgular:**
+- **XGBoost: +0.20** — Marjinal ama pozitif katkı.
+- **Feature Engineering: -0.09** — Dropout UCI'da olduğu gibi burada da hafif negatif. Orijinal özellikler zaten çok güçlü (num_TMA r=0.76, unregistered r=-0.89), ek özellikler gürültü eklemiş.
+- **FE + XGBoost birlikte: +0.26** — XGBoost, FE'nin eklediği gürültüyü tolere edebiliyor.
+- v1 zaten %94.56 olduğu için iyileştirme marjı çok dar. Bu veri setinde ham özellikler yeterince güçlü.
+
+### Student Habits vs OULAD Karşılaştırma
+
+| | Student Habits (sentetik) | OULAD (gerçek) |
+|---|---|---|
+| v1 en iyi | Naive Bayes %75.19 | Random Forest %94.56 |
+| v2 en iyi | XGBoost %80.62 | XGBoost %94.82 |
+| Fark | — | **+14.20 puan** |
+
+OULAD ile dramatik bir performans artışı sağlandı. Gerçek veri, güçlü sinyaller ve 32x daha büyük veri seti farkı yarattı.
+
+---
+
+## Kalan Adımlar
+
+| # | Aşama | Durum |
+|---|-------|-------|
+| 1 | Veri Seti Seçimi | ✅ Tamamlandı |
+| 2 | Veri Seti Değişikliği (Habits → OULAD) | ✅ Tamamlandı |
+| 3 | Problem Tanımlama | ✅ Tamamlandı |
+| 4 | EDA (Dropout + OULAD) | ✅ Tamamlandı |
+| 5 | Veri Ön İşleme | ✅ Tamamlandı |
+| 6 | Modelleme v1 (4 algoritma) | ✅ Tamamlandı |
+| 7 | Modelleme v2 (FE + XGBoost) | ✅ Tamamlandı |
+| 8 | En iyi modelleri kaydet (.pkl) | ✅ Tamamlandı |
+| 9 | Ablation Study (Dropout + OULAD) | ✅ Tamamlandı |
+| 10 | Yerelleştirme (Dropout UCI → Türkiye) | ✅ Tamamlandı |
+| 11 | Chatbot | ✅ Tamamlandı |
+| 12 | Raporlama | ⬜ |
+
+---
+
+## Chatbot — Akademik Danışman Asistanı
+
+### Mimari
+
+```
+Öğrenci ↔ Streamlit UI ↔ Google Gemini (LLM) ↔ XGBoost Modeli (.pkl)
+          (chat arayüz)   (doğal sohbet +        (tahmin +
+                           veri çıkarma +          olasılıklar)
+                           sonuç yorumlama)
+```
+
+### Teknoloji
+
+- **Frontend:** Streamlit (Python tabanlı web arayüzü)
+- **LLM Katmanı:** Google Gemini 2.0 Flash (ücretsiz API)
+- **ML Model:** XGBoost (yerelleştirilmiş, 22 özellik, F1: %75.27)
+
+### Chatbot Akışı
+
+1. Öğrenci doğal dilde sohbet eder
+2. Gemini LLM sohbetten yapılandırılmış veri çıkarır (JSON)
+3. Yeterli veri toplandığında XGBoost modeli tahmin yapar
+4. Gemini sonuçları yapıcı ve destekleyici dille yorumlar
+5. Öğrenciye kişisel öneriler ve what-if analizi sunulur
+
+### Özellik Öncelikleri
+
+| Öncelik | Sayı | Özellikler |
+|---------|------|------------|
+| Essential (mutlaka) | 8 | Dönem ders sayıları, notlar, sınav sayıları |
+| High (önemli) | 3 | Yaş, cinsiyet, burs durumu |
+| Medium (sorulabilir) | 4 | Tercih sırası, bölüm, giriş puanı, önceki not |
+| Low (varsayılan) | 7 | Medeni durum, başvuru türü, anne/baba bilgileri |
+
+### Tasarım Kararları
+
+1. **"Kalırsın" demek yerine yapıcı dil** — Öğrenciye risk seviyesi gösterilir ama her zaman iyileştirme önerileri verilir
+2. **Doğal sohbet** — Anket formatı değil, sohbet akışında bilgi toplanır
+3. **Referans karşılaştırma** — Öğrencinin verileri mezun/terk öğrenci ortalamalarıyla karşılaştırılır
+4. **Eksik veri toleransı** — Öğrenci bazı bilgileri bilmezse varsayılan değerler kullanılır
+5. **LLM + ML hibrit** — Gemini doğal dil işler, XGBoost tahmin yapar. İki farklı AI birlikte çalışır.
+
+### Dosya Yapısı
+
+```
+chatbot/
+├── app.py                → Ana Streamlit uygulaması
+├── prepare_chatbot.py    → Normalizasyon ve config hazırlığı
+├── scaler_params.json    → MinMaxScaler min/max değerleri
+├── feature_config.json   → 22 özellik: Türkçe ad, tip, seçenekler, varsayılan, öncelik
+└── reference_stats.json  → Dropout/Enrolled/Graduate grup ortalamaları
+```
+
+### Çalıştırma
+
+```bash
+streamlit run chatbot/app.py
+```
+
+Groq API key gerekli (ücretsiz): https://console.groq.com/keys
+
+---
+
+## Yerelleştirme (Dropout UCI → Türkiye)
+
+### Neden Yapıldı?
+
+Dropout UCI Portekiz üniversitesinden. Chatbot Türk öğrencilere yönelik olacağı için Türkiye'de karşılığı olmayan özellikler çıkarılıp model yeniden eğitildi.
+
+### Çıkarılan Özellikler (3 adet)
+
+| Özellik | Çıkarılma Sebebi |
+|---|---|
+| Tuition fees up to date | Türkiye'de devlet üniversitelerinde harç yok |
+| Debtor | Borçlu kavramı Türk eğitim sisteminde farklı |
+| Inflation rate | Portekiz'e ait makroekonomik veri |
+
+### Uyarlanan Özellikler (soru metni değişti, özellik aynı)
+
+| Orijinal | Türkiye Karşılığı |
+|---|---|
+| Admission grade | YKS puanı |
+| Previous qualification | Önceki eğitim (Lise, Önlisans...) |
+| Application mode | Başvuru türü (YKS, DGS, Yatay Geçiş) |
+| Mother/Father qualification | Anne/Baba eğitim düzeyi |
+| Mother/Father occupation | Anne/Baba mesleği |
+
+### Yerelleştirilmiş Model Sonuçları
+
+| Model | F1-Score |
+|---|---|
+| kNN | %68.91 |
+| Naive Bayes | %66.76 |
+| Decision Tree | %71.54 |
+| Random Forest | %73.85 |
+| **XGBoost** | **%75.27** |
+
+### Performans Etkisi
+
+| Versiyon | Özellik | F1 |
+|---|---|---|
+| Orijinal (v2) | 25 özellik | %77.26 |
+| Yerelleştirilmiş | 22 özellik | %75.27 |
+| Fark | -3 özellik | **-1.99 puan** |
+
+3 özellik çıkardık, sadece ~2 puan kaybettik. Tuition fees (r=+0.41) en güçlü çıkarılan özellikti, bu kayıbın çoğu oradan geliyor. Kabul edilebilir bir kayıp — chatbot tutarlılığı için doğru karar.
+
+### Chatbot İçin Kullanılacak Model
+
+`models/best_model_dropout_localized.pkl` — XGBoost, 22 özellik, F1: %75.27
+
+---
+
+## LLM Sağlayıcı Değişikliği: Gemini → Groq
+
+### Sorun
+
+Google Gemini API (ücretsiz tier) Türkiye'den kullanılamadı. API key alınıp chatbot'a girilmesine rağmen `429 You exceeded your current quota` hatası alındı. Hata detayı incelendiğinde tüm ücretsiz metrikler için `limit: 0` olduğu görüldü — bu, Türkiye'den bölgesel kısıtlama olduğuna işaret ediyor.
+
+### Çözüm: Groq API
+
+Groq, ücretsiz LLM API hizmeti sunuyor ve Türkiye'den erişilebilir durumda. `llama-3.3-70b-versatile` modeli kullanılıyor.
+
+| Özellik | Gemini | Groq |
+|---|---|---|
+| Model | Gemini 2.0 Flash | Llama 3.3 70B |
+| Maliyet | Ücretsiz (bölge kısıtlı) | Ücretsiz |
+| Türkiye erişimi | ❌ (quota: 0) | ✅ |
+| API stili | Google genai SDK | OpenAI-uyumlu |
+
+### Yapılan Değişiklikler
+
+1. `groq` Python paketi kuruldu (`pip install groq`)
+2. `chatbot/api_key.txt` → Groq API key ile güncellendi
+3. `chatbot/app.py` tamamen yeniden yazıldı:
+   - `google.generativeai` → `from groq import Groq`
+   - Gemini'nin stateful chat API'si → Groq'un stateless `chat.completions.create` API'si
+   - Her istekte sistem prompt + sohbet geçmişi gönderiliyor
+   - `chat_with_llm()` fonksiyonu eklendi
+   - Sohbet geçmişi `st.session_state.chat_history` ile manuel takip ediliyor
+
+### Test Sonucu
+
+Groq API Türkçe konuşma, veri çıkarımı ve analiz akışı başarıyla çalıştı.
+
+---
+
+## Chatbot — Son Durum
+
+### Mimari
+
+```
+Öğrenci ↔ Streamlit UI ↔ Groq (Llama 3.3 70B) ↔ XGBoost Modeli
+                                    ↓
+                           [DATA: {...}] çıkarımı
+                                    ↓
+                          MinMaxScaler normalizasyon
+                                    ↓
+                          XGBoost tahmin + olasılıklar
+                                    ↓
+                          LLM yapıcı yorum + öneriler
+```
+
+### Özellikler
+
+- Doğal Türkçe sohbet (anket değil, danışman havası)
+- 22 özellik sohbet içinde toplanıyor (4 öncelik seviyesi)
+- Otomatik veri çıkarımı (`[DATA: {...}]` formatı, öğrenciye görünmez)
+- 3 sınıflı tahmin: Terk Riski / Devam Ediyor / Mezuniyet
+- Olasılık dağılımı çubuk grafik
+- Mezun vs terk ortalamalarıyla karşılaştırma
+- Yapıcı ve destekleyici dil (asla "kalırsın" demez)
+- API key gizli (`api_key.txt`, gitignore'da)
+- Streamlit UI temizlenmiş (deploy butonu, menü, footer gizli)
+
+### Dosya Yapısı (Güncel)
+
+```
+chatbot/
+├── app.py                → Ana uygulama (Groq + Llama 3.3 70B)
+├── prepare_chatbot.py    → Normalizasyon ve config hazırlığı
+├── api_key.txt           → Groq API key (gitignore'da)
+├── scaler_params.json    → MinMaxScaler min/max değerleri
+├── feature_config.json   → 22 özellik: Türkçe ad, tip, seçenekler, varsayılan, öncelik
+└── reference_stats.json  → Dropout/Enrolled/Graduate grup ortalamaları
+```
+
+### Çalıştırma
+
+```bash
+streamlit run chatbot/app.py
+```
+
+Groq API key gerekli (ücretsiz): https://console.groq.com/keys

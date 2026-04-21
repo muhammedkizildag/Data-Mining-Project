@@ -1,0 +1,272 @@
+{
+  "Dropout": {
+    "Marital status": {
+      "mean": 1.26,
+      "median": 1.0
+    },
+    "Application mode": {
+      "mean": 23.71,
+      "median": 18.0
+    },
+    "Application order": {
+      "mean": 1.59,
+      "median": 1.0
+    },
+    "Course": {
+      "mean": 8755.63,
+      "median": 9238.0
+    },
+    "Previous qualification": {
+      "mean": 5.31,
+      "median": 1.0
+    },
+    "Previous qualification (grade)": {
+      "mean": 131.11,
+      "median": 133.1
+    },
+    "Mother's qualification": {
+      "mean": 21.04,
+      "median": 19.0
+    },
+    "Father's qualification": {
+      "mean": 22.68,
+      "median": 22.0
+    },
+    "Mother's occupation": {
+      "mean": 10.12,
+      "median": 5.0
+    },
+    "Father's occupation": {
+      "mean": 10.14,
+      "median": 7.0
+    },
+    "Admission grade": {
+      "mean": 124.96,
+      "median": 123.6
+    },
+    "Gender": {
+      "mean": 0.49,
+      "median": 0.0
+    },
+    "Scholarship holder": {
+      "mean": 0.09,
+      "median": 0.0
+    },
+    "Age at enrollment": {
+      "mean": 26.07,
+      "median": 23.0
+    },
+    "Curricular units 1st sem (enrolled)": {
+      "mean": 5.82,
+      "median": 6.0
+    },
+    "Curricular units 1st sem (evaluations)": {
+      "mean": 7.75,
+      "median": 8.0
+    },
+    "Curricular units 1st sem (approved)": {
+      "mean": 2.55,
+      "median": 2.0
+    },
+    "Curricular units 1st sem (grade)": {
+      "mean": 7.26,
+      "median": 10.93
+    },
+    "Curricular units 2nd sem (enrolled)": {
+      "mean": 5.78,
+      "median": 6.0
+    },
+    "Curricular units 2nd sem (evaluations)": {
+      "mean": 7.17,
+      "median": 7.0
+    },
+    "Curricular units 2nd sem (approved)": {
+      "mean": 1.94,
+      "median": 0.0
+    },
+    "Curricular units 2nd sem (grade)": {
+      "mean": 5.9,
+      "median": 0.0
+    }
+  },
+  "Enrolled": {
+    "Marital status": {
+      "mean": 1.15,
+      "median": 1.0
+    },
+    "Application mode": {
+      "mean": 19.8,
+      "median": 17.0
+    },
+    "Application order": {
+      "mean": 1.63,
+      "median": 1.0
+    },
+    "Course": {
+      "mean": 8868.81,
+      "median": 9147.0
+    },
+    "Previous qualification": {
+      "mean": 4.79,
+      "median": 1.0
+    },
+    "Previous qualification (grade)": {
+      "mean": 131.21,
+      "median": 130.0
+    },
+    "Mother's qualification": {
+      "mean": 17.62,
+      "median": 19.0
+    },
+    "Father's qualification": {
+      "mean": 20.92,
+      "median": 19.0
+    },
+    "Mother's occupation": {
+      "mean": 14.72,
+      "median": 5.0
+    },
+    "Father's occupation": {
+      "mean": 14.46,
+      "median": 7.0
+    },
+    "Admission grade": {
+      "mean": 125.53,
+      "median": 124.1
+    },
+    "Gender": {
+      "mean": 0.39,
+      "median": 0.0
+    },
+    "Scholarship holder": {
+      "mean": 0.16,
+      "median": 0.0
+    },
+    "Age at enrollment": {
+      "mean": 22.37,
+      "median": 20.0
+    },
+    "Curricular units 1st sem (enrolled)": {
+      "mean": 5.96,
+      "median": 6.0
+    },
+    "Curricular units 1st sem (evaluations)": {
+      "mean": 9.34,
+      "median": 9.0
+    },
+    "Curricular units 1st sem (approved)": {
+      "mean": 4.32,
+      "median": 5.0
+    },
+    "Curricular units 1st sem (grade)": {
+      "mean": 11.13,
+      "median": 12.0
+    },
+    "Curricular units 2nd sem (enrolled)": {
+      "mean": 5.94,
+      "median": 6.0
+    },
+    "Curricular units 2nd sem (evaluations)": {
+      "mean": 9.44,
+      "median": 9.0
+    },
+    "Curricular units 2nd sem (approved)": {
+      "mean": 4.06,
+      "median": 4.0
+    },
+    "Curricular units 2nd sem (grade)": {
+      "mean": 11.12,
+      "median": 12.0
+    }
+  },
+  "Graduate": {
+    "Marital status": {
+      "mean": 1.13,
+      "median": 1.0
+    },
+    "Application mode": {
+      "mean": 15.02,
+      "median": 7.0
+    },
+    "Application order": {
+      "mean": 1.85,
+      "median": 1.0
+    },
+    "Course": {
+      "mean": 8917.25,
+      "median": 9254.0
+    },
+    "Previous qualification": {
+      "mean": 4.03,
+      "median": 1.0
+    },
+    "Previous qualification (grade)": {
+      "mean": 134.08,
+      "median": 133.1
+    },
+    "Mother's qualification": {
+      "mean": 19.31,
+      "median": 19.0
+    },
+    "Father's qualification": {
+      "mean": 22.5,
+      "median": 19.0
+    },
+    "Mother's occupation": {
+      "mean": 10.15,
+      "median": 5.0
+    },
+    "Father's occupation": {
+      "mean": 10.37,
+      "median": 7.0
+    },
+    "Admission grade": {
+      "mean": 128.79,
+      "median": 127.4
+    },
+    "Gender": {
+      "mean": 0.25,
+      "median": 0.0
+    },
+    "Scholarship holder": {
+      "mean": 0.38,
+      "median": 0.0
+    },
+    "Age at enrollment": {
+      "mean": 21.78,
+      "median": 19.0
+    },
+    "Curricular units 1st sem (enrolled)": {
+      "mean": 6.67,
+      "median": 6.0
+    },
+    "Curricular units 1st sem (evaluations)": {
+      "mean": 8.28,
+      "median": 8.0
+    },
+    "Curricular units 1st sem (approved)": {
+      "mean": 6.23,
+      "median": 6.0
+    },
+    "Curricular units 1st sem (grade)": {
+      "mean": 12.64,
+      "median": 13.0
+    },
+    "Curricular units 2nd sem (enrolled)": {
+      "mean": 6.63,
+      "median": 6.0
+    },
+    "Curricular units 2nd sem (evaluations)": {
+      "mean": 8.14,
+      "median": 8.0
+    },
+    "Curricular units 2nd sem (approved)": {
+      "mean": 6.18,
+      "median": 6.0
+    },
+    "Curricular units 2nd sem (grade)": {
+      "mean": 12.7,
+      "median": 13.0
+    }
+  }
+}
