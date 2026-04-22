@@ -1335,3 +1335,13 @@ Skorlarda değişiklik yok — Pipeline metodolojik düzeltme, performans etkisi
 - `auto_convert_grade()` genişletildi: ≤4.0 → 4'lük sistem, >20 → 100'lük sistem, 4-20 arası → zaten 20'lik
 - System prompt'tan dönüşüm formülleri kaldırıldı, LLM'e "ham değeri olduğu gibi yaz" talimatı verildi
 - Tüm not dönüşümü artık %100 Python tarafında yapılıyor, LLM'e matematik bırakılmıyor
+
+### 2. Dönem Varsayılan Değer Fallback
+
+**Sorun:** Henüz 2. dönemi görmemiş bir 1. sınıf öğrencisi chatbot'a sadece 1. dönem bilgilerini verdiğinde, 2. dönem için iyimser default değerler (6 ders alınmış, 5 geçilmiş, 12/20 not) kullanılıyordu. Bu, zor durumdaki öğrencinin gerçek riskini gizliyordu.
+
+**Çözüm:**
+- `predict_student()` fonksiyonuna `SEM_FALLBACK_MAP` eklendi
+- 2. dönem verileri eksikse ve 1. dönem karşılıkları varsa, 1. dönem değerleri 2. döneme kopyalanır
+- Her iki dönem de eksikse default değerler kullanılmaya devam eder
+- Öğrencinin mevcut trendi korunur: 1. dönemde 3 ders geçmiş öğrencinin 2. dönemi de 3 olarak varsayılır, 5 değil

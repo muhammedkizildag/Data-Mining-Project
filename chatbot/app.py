@@ -79,11 +79,22 @@ LLM_MODEL = "llama-3.3-70b-versatile"
 # ============================================================
 # YARDIMCI FONKSİYONLAR
 # ============================================================
+SEM_FALLBACK_MAP = {
+    "Curricular units 2nd sem (enrolled)": "Curricular units 1st sem (enrolled)",
+    "Curricular units 2nd sem (evaluations)": "Curricular units 1st sem (evaluations)",
+    "Curricular units 2nd sem (approved)": "Curricular units 1st sem (approved)",
+    "Curricular units 2nd sem (grade)": "Curricular units 1st sem (grade)",
+}
+
 def predict_student(collected_data):
     input_values = []
+    fallback_used = []
     for feat in FEATURE_ORDER:
         if feat in collected_data:
             raw_val = float(collected_data[feat])
+        elif feat in SEM_FALLBACK_MAP and SEM_FALLBACK_MAP[feat] in collected_data:
+            raw_val = float(collected_data[SEM_FALLBACK_MAP[feat]])
+            fallback_used.append(feat)
         else:
             raw_val = float(feature_config[feat]['default'])
             raw_val = auto_convert_turkish_scale(feat, raw_val)
@@ -92,7 +103,7 @@ def predict_student(collected_data):
     X = pd.DataFrame([input_values], columns=FEATURE_ORDER)
     prediction = pipeline.predict(X)[0]
     probabilities = pipeline.predict_proba(X)[0]
-    return prediction, probabilities
+    return prediction, probabilities, fallback_used
 
 def get_feature_comparison(collected_data):
     comparisons = []
@@ -461,13 +472,16 @@ if prompt := st.chat_input("Mesajını yaz..."):
 
                     if check_analysis_ready(response_text) and not st.session_state.prediction_done:
                         st.session_state.prediction_done = True
-                        prediction, probabilities = predict_student(st.session_state.collected_data)
+                        prediction, probabilities, fallback_used = predict_student(st.session_state.collected_data)
 
                         comparisons = get_feature_comparison(st.session_state.collected_data)
 
                         pred_name = TARGET_NAMES[prediction]
 
                         result_text = f"\n\n---\n### 📊 Analiz Sonucu\n\n"
+
+                        if fallback_used:
+                            result_text += "_Not: 2. dönem bilgilerinin bir kısmı eksik olduğu için bu alanlarda 1. dönem performansının benzer devam ettiği varsayıldı._\n\n"
 
                         result_text += "**Olasılık Dağılımı:**\n"
                         for i in TARGET_NAMES:
