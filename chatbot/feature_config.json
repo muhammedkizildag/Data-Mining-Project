@@ -81,10 +81,10 @@
     "question": "Lise/önceki eğitim not ortalamanız neydi? (100 üzerinden)",
     "type": "numeric",
     "range": [
-      95,
-      190
+      0,
+      100
     ],
-    "default": 130,
+    "default": 70,
     "priority": "medium"
   },
   "Mother's qualification": {
@@ -155,13 +155,13 @@
   },
   "Admission grade": {
     "tr": "Üniversite giriş puanı",
-    "question": "Üniversiteye giriş puanınız neydi? (100-200 arası)",
+    "question": "YKS puanınız neydi? (500 üzerinden)",
     "type": "numeric",
     "range": [
-      95,
-      190
+      100,
+      500
     ],
-    "default": 130,
+    "default": 300,
     "priority": "medium"
   },
   "Gender": {

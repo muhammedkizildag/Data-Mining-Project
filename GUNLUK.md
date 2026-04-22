@@ -1308,3 +1308,21 @@ Skorlarda değişiklik yok — Pipeline metodolojik düzeltme, performans etkisi
 
 6. **Gereksiz numpy importları kaldırıldı**
    `chatbot/app.py` ve `chatbot/prepare_chatbot.py`'den kullanılmayan `import numpy as np` satırları çıkarıldı.
+
+---
+
+## Metodoloji İncelemesi ve Chatbot İyileştirmeleri (22 Nisan 2026)
+
+### YKS Puanı ve Lise Ortalaması Ölçek Dönüşümü
+
+**Sorun:** Model Portekiz eğitim sisteminin 95-190 ölçeğinde eğitilmiş. Türk öğrenci "YKS'den 380 aldım" veya "lise ortalamam 85" derse, bu değerler dönüştürülmeden modele gidiyordu. MinMaxScaler 0-1 aralığının dışına çıkıyor, tahmin anlamsızlaşıyordu.
+
+**Çözüm:**
+- `app.py`'ye `auto_convert_turkish_scale()` fonksiyonu eklendi
+- Admission grade > 190 ise YKS puanı kabul edilip `(value/500)*(190-95)+95` formülüyle Portekiz ölçeğine dönüştürülür
+- Previous qualification (grade) için 0 < value ≤ 100 ise 100'lük lise notu kabul edilip `(value/100)*(190-95)+95` formülüyle dönüştürülür
+- Admission grade ≤ 190 ise zaten model ölçeğinde kabul edilir, dokunulmaz
+- `feature_config.json`'daki range'ler ve default'lar Türk ölçeğine güncellendi (YKS: 100-500 default 300, Lise: 0-100 default 70)
+- `predict_student()` fonksiyonunda default değerler de aynı dönüşümden geçirilir
+- `prepare_chatbot.py` aynı range/question/default değerleriyle güncellendi (yeniden çalıştırıldığında tutarlılık bozulmaz)
+- System prompt'a LLM'in bu değerleri dönüştürmemesi talimatı eklendi

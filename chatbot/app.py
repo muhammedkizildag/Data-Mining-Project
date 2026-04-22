@@ -86,6 +86,7 @@ def predict_student(collected_data):
             raw_val = float(collected_data[feat])
         else:
             raw_val = float(feature_config[feat]['default'])
+            raw_val = auto_convert_turkish_scale(feat, raw_val)
         input_values.append(raw_val)
 
     X = pd.DataFrame([input_values], columns=FEATURE_ORDER)
@@ -152,6 +153,12 @@ NOT SİSTEMİ DÖNÜŞÜMÜ (GİZLİ — öğrenciye gösterme):
 - Öğrenci hangi sistemi kullandığını belirtmezse 4'lük varsay.
 - Bu dönüşümü SADECE [DATA] etiketinde yap, öğrenciye "20'lik sisteme çeviriyorum" gibi şeyler SÖYLEME.
 - Öğrenciye sadece "Anladım, notun şuymuş" de, formül gösterme.
+
+YKS PUANI ve LİSE ORTALAMASI:
+- Öğrenci YKS puanını veya lise ortalamasını SÖYLEDİĞİ GİBİ [DATA] etiketine yaz. Dönüşüm yapma.
+- Python tarafı otomatik dönüştürür, sen ham değeri aktar.
+- Örnek: "YKS'den 380 aldım" → [DATA: {{"Admission grade": 380}}]
+- Örnek: "Lise ortalamam 85" → [DATA: {{"Previous qualification (grade)": 85}}]
 
 YAŞ ve KAYIT YAŞI FARKI:
 - "Age at enrollment" = öğrencinin ÜNİVERSİTEYE İLK KAYIT OLDUĞU YAŞ, şu anki yaşı değil.
@@ -295,6 +302,13 @@ def auto_convert_grade(feature_name, value):
         return (value / 4.0) * 20.0
     return value
 
+def auto_convert_turkish_scale(feature_name, value):
+    if feature_name == "Admission grade" and value > 190:
+        return (value / 500) * (190 - 95) + 95
+    if feature_name == "Previous qualification (grade)" and 0 < value <= 100:
+        return (value / 100) * (190 - 95) + 95
+    return value
+
 def clean_extracted_data(raw_data):
     cleaned = {}
     for key, value in raw_data.items():
@@ -313,6 +327,7 @@ def clean_extracted_data(raw_data):
         try:
             num_val = float(value)
             num_val = auto_convert_grade(fixed_key, num_val)
+            num_val = auto_convert_turkish_scale(fixed_key, num_val)
             cleaned[fixed_key] = num_val
         except (ValueError, TypeError):
             continue

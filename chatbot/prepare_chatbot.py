@@ -68,8 +68,8 @@ feature_config = {
         "tr": "Önceki eğitim notu",
         "question": "Lise/önceki eğitim not ortalamanız neydi? (100 üzerinden)",
         "type": "numeric",
-        "range": [95, 190],
-        "default": 130,
+        "range": [0, 100],
+        "default": 70,
         "priority": "medium"
     },
     "Mother's qualification": {
@@ -106,10 +106,10 @@ feature_config = {
     },
     "Admission grade": {
         "tr": "Üniversite giriş puanı",
-        "question": "Üniversiteye giriş puanınız neydi? (100-200 arası)",
+        "question": "YKS puanınız neydi? (500 üzerinden)",
         "type": "numeric",
-        "range": [95, 190],
-        "default": 130,
+        "range": [100, 500],
+        "default": 300,
         "priority": "medium"
     },
     "Gender": {
