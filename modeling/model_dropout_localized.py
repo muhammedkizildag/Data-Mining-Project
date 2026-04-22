@@ -5,7 +5,7 @@ import os
 import warnings
 warnings.filterwarnings('ignore')
 
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, KFold
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, StratifiedKFold
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier
@@ -134,7 +134,7 @@ print("\n" + "=" * 70)
 print("  HİPERPARAMETRE OPTİMİZASYONU (GridSearchCV)")
 print("=" * 70)
 
-kf = KFold(n_splits=5, shuffle=True, random_state=42)
+kf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
 print("\n  [kNN]")
 knn_params = {
@@ -192,7 +192,7 @@ print("\n" + "=" * 70)
 print("  10-FOLD CROSS VALIDATION")
 print("=" * 70)
 
-kf10 = KFold(n_splits=10, shuffle=True, random_state=42)
+kf10 = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
 
 optimized_models = {
     "kNN": knn_grid.best_estimator_,

@@ -1185,3 +1185,57 @@ Metodolojik düzeltmelerden sonra README dosyası güncel kod akışıyla uyumlu
 ### Commit
 
 Bu düzenlemeler `Fix leakage and update docs` commit'i ile `feature/student-success-prediction` branch'ine pushlandı.
+
+---
+
+## KFold → StratifiedKFold Düzeltmesi (22 Nisan 2026)
+
+### Sorun
+
+Her iki güncel modelleme dosyasında (`model_dropout_localized.py`, `model_oulad_v2.py`) cross-validation için `KFold` kullanılıyordu. Sınıflandırma problemlerinde `KFold`, her fold'da sınıf dağılımını garanti etmez. Özellikle Dropout UCI'da Enrolled sınıfı sadece %18 — bazı fold'larda bu sınıftan çok az örnek düşebilir ve CV skorları yanıltıcı olabilir.
+
+Aynı zamanda `train_test_split`'te zaten `stratify=y` kullanılıyordu ama CV'de kullanılmıyordu — bu bir tutarsızlıktı.
+
+### Düzeltme
+
+Her iki dosyada `KFold` → `StratifiedKFold` ile değiştirildi:
+- 5-Fold (GridSearchCV için): `StratifiedKFold(n_splits=5, shuffle=True, random_state=42)`
+- 10-Fold (final CV için): `StratifiedKFold(n_splits=10, shuffle=True, random_state=42)`
+
+`StratifiedKFold` her fold'da orijinal sınıf oranlarını korur, böylece tüm fold'larda Dropout/Enrolled/Graduate (veya Withdrawn/Fail/Pass) dağılımı aynı kalır.
+
+### Etkilenen Dosyalar
+
+- `modeling/model_dropout_localized.py`
+- `modeling/model_oulad_v2.py`
+
+### Yeni Sonuçlar
+
+| Model | Eski F1 (KFold) | Yeni F1 (StratifiedKFold) | Fark |
+|---|---|---|---|
+| Dropout Localized (XGBoost) | %75.27 | %75.10 | -0.17 |
+| OULAD v2 (XGBoost) | %80.40 | %80.48 | +0.08 |
+
+Farklar minimal — bu beklenen bir sonuç çünkü veri setleri yeterince büyük olduğunda KFold ve StratifiedKFold yakın sonuçlar üretir. Ancak metodolojik olarak StratifiedKFold daha doğru ve train_test_split ile tutarlı.
+
+### Sınıf Bazlı Güncel Sonuçlar
+
+**Dropout Localized (XGBoost):**
+
+| Sınıf | Precision | Recall | F1 |
+|---|---|---|---|
+| Dropout | %78.88 | %72.60 | %75.61 |
+| Enrolled | %51.53 | %42.44 | %46.54 |
+| Graduate | %80.65 | %89.89 | %85.02 |
+
+Dropout Recall: %72.60
+
+**OULAD v2 (XGBoost):**
+
+| Sınıf | Precision | Recall | F1 |
+|---|---|---|---|
+| Withdrawn | %75.26 | %82.87 | %78.88 |
+| Fail | %60.82 | %45.84 | %52.28 |
+| Pass | %92.38 | %96.64 | %94.46 |
+
+Withdrawn Recall: %82.87
