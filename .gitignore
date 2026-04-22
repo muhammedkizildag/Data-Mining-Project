@@ -2,5 +2,5 @@
 .venv
 dataset
 chatbot/api_key.txt
-.DS_Store
+**/.DS_Store
 datasets/oulad/studentVle.csv
