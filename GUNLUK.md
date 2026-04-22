@@ -1150,3 +1150,38 @@ Withdrawn Recall: %83.13 — risk öğrencilerinin %83.1'ini yakalıyor.
 |---|---|---|---|---|
 | Dropout Localized | %75.27 | %75.27 | 0 | Scaler leakage etkisi minimal |
 | OULAD v2 | %94.56 | %80.40 | **-14.16** | unregistered target leakage çıkarıldı |
+
+---
+
+## README Güncellemesi ve Akış Netleştirmesi (22 Nisan 2026)
+
+Metodolojik düzeltmelerden sonra README dosyası güncel kod akışıyla uyumlu hale getirildi.
+
+### Yapılan Güncellemeler
+
+1. **Güncel ana dosyalar netleştirildi**
+   - `preprocessing/preprocess_dropout.py`
+   - `preprocessing/prepare_oulad.py`
+   - `modeling/model_dropout_localized.py`
+   - `modeling/model_oulad_v2.py`
+   - `chatbot/app.py`
+
+2. **Legacy dosyalar ayrıldı**
+   Eski model ve ablation dosyaları proje geçmişini göstermek için korunuyor, ancak final metodolojik sonuç olarak kullanılmaması gerektiği README'de belirtildi.
+
+3. **Eski OULAD skorları düzeltilmiş bağlama alındı**
+   `%94` civarı OULAD skorlarının `unregistered` target leakage nedeniyle şiştiği, temiz OULAD v2 skorunun `%80.40` olduğu README'ye işlendi.
+
+4. **Ön işleme çıktıları güncellendi**
+   - `dropout_processed.csv`: 4.424 x 37
+   - `oulad_processed.csv`: 32.593 x 39
+
+5. **Data leakage açıklaması README'ye eklendi**
+   Scaler ve mutual information işlemlerinin preprocessing aşamasında değil, train/test split sonrası modelleme aşamasında yapıldığı belirtildi.
+
+6. **OULAD konumlandırması netleştirildi**
+   OULAD modeli dönem sonu/durum sınıflandırması olarak konumlandırıldı. Erken uyarı sistemi için zaman kesitiyle yeniden tasarım gerektiği not edildi.
+
+### Commit
+
+Bu düzenlemeler `Fix leakage and update docs` commit'i ile `feature/student-success-prediction` branch'ine pushlandı.
