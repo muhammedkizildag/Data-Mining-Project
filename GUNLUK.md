@@ -1239,3 +1239,72 @@ Dropout Recall: %72.60
 | Pass | %92.38 | %96.64 | %94.46 |
 
 Withdrawn Recall: %82.87
+
+---
+
+## sklearn Pipeline Entegrasyonu (22 Nisan 2026)
+
+### Sorun
+
+Modelleme dosyalarında MinMaxScaler, GridSearchCV'den **önce** tüm training verisi üzerinde fit ediliyordu. Bu, CV fold'larında hafif bir leakage yaratıyordu — her validation fold'u, tüm training setinden fit edilmiş scaler istatistiklerini görüyordu.
+
+Ayrıca chatbot tarafında model ve scaler ayrı artifact'lardı (`.pkl` + `scaler_params.json`). `prepare_chatbot.py` scaler parametrelerini tüm veriden hesaplıyordu (training-only olması gerekirken) — bu da ayrı bir leakage kaynağıydı.
+
+### Çözüm: sklearn Pipeline
+
+`Pipeline([('scaler', MinMaxScaler()), ('model', Algo())])` yapısı ile scaler ve model birlikte sarıldı:
+
+1. **CV'de temiz scaler:** GridSearchCV her fold'unda scaler'ı sadece o fold'un training kısmından fit eder, validation kısmına sadece transform uygular.
+2. **Tek artifact:** Model kaydedilirken scaler + model birlikte `.pkl` olarak kaydedilir.
+3. **Chatbot basitleşti:** Manuel `normalize_value()` fonksiyonu kaldırıldı, `scaler_params.json` yüklemesi kaldırıldı. Chatbot artık raw değerlerle `pipeline.predict()` çağırır, Pipeline kendi scaler'ını uygular.
+4. **Tutarsızlık giderildi:** Chatbot artık training-only scaler kullanır (Pipeline içinde gömülü), daha önce tüm veriden hesaplanan scaler yerine.
+
+### Etkilenen Dosyalar
+
+| Dosya | Değişiklik |
+|---|---|
+| `modeling/model_dropout_localized.py` | Pipeline yapısı, `model__param` formatı, raw veri kullanımı |
+| `modeling/model_oulad_v2.py` | Aynı Pipeline yapısı, MI raw train üzerinde (Pipeline dışında) |
+| `chatbot/app.py` | `normalize_value()` kaldırıldı, `scaler_params` kaldırıldı, `pipeline.predict()` |
+| `chatbot/prepare_chatbot.py` | Scaler params hesaplama kaldırıldı |
+
+### OULAD MI Feature Selection Notu
+
+OULAD'da MI feature selection Pipeline dışında raw training verisi üzerinde yapılıyor. MI önceden scaled veri üzerinde hesaplanıyordu. Raw veride de aynı 8 özellik (MI < 0.01) çıkarıldı — sonuçlar etkilenmedi.
+
+### Sonuçlar
+
+| Model | Önceki F1 | Pipeline F1 | Fark |
+|---|---|---|---|
+| Dropout Localized (XGBoost) | %75.10 | %75.10 | 0 |
+| OULAD v2 (XGBoost) | %80.48 | %80.48 | 0 |
+
+Skorlarda değişiklik yok — Pipeline metodolojik düzeltme, performans etkisi yok.
+
+---
+
+## Pipeline Sonrası Temizlik (22 Nisan 2026)
+
+### Yapılan Düzeltmeler
+
+1. **Chatbot feature names warning düzeltildi**
+   Chatbot `np.array` ile tahmin gönderiyordu, Pipeline ise feature isimleriyle fit edilmişti. Bu `X does not have valid feature names` uyarısı veriyordu. `np.array` yerine `pd.DataFrame(columns=FEATURE_ORDER)` kullanıldı.
+
+2. **`chatbot/scaler_params.json` silindi**
+   Pipeline entegrasyonundan sonra chatbot artık bu dosyayı yüklemiyordu. Kullanılmayan dosya repodan çıkarıldı.
+
+3. **README güncellendi**
+   - Klasör yapısından `scaler_params.json` çıkarıldı
+   - Chatbot hazırlık adımından `scaler_params.json` çıkarıldı
+   - Chatbot açıklaması Pipeline yapısını yansıtacak şekilde güncellendi
+   - "Pipeline gelecekte kullanılabilir" notu → "Pipeline kullanılıyor" olarak güncellendi
+   - Model dosyaları açıklamalarına Pipeline notu eklendi
+
+4. **MI Pipeline dışında bırakıldı (bilinçli tercih)**
+   OULAD'daki MI feature selection Pipeline dışında raw train verisi üzerinde yapılıyor. MI'yı Pipeline içine almak custom transformer veya sabit `k` gerektirir. Çıkarılan 8 özelliğin MI skorları sıfıra yakın olduğundan hangi fold'da hesaplansa da aynı sonucu verir — pratikte CV optimizm riski yok.
+
+5. **README skorları güncellendi**
+   README'deki model sonuçları Pipeline + StratifiedKFold sonrası güncel değerlerle güncellendi: Dropout XGBoost %75.27 → %75.10, OULAD XGBoost %80.40 → %80.48. Tekrar eden iki Pipeline notu tek maddede birleştirildi.
+
+6. **Gereksiz numpy importları kaldırıldı**
+   `chatbot/app.py` ve `chatbot/prepare_chatbot.py`'den kullanılmayan `import numpy as np` satırları çıkarıldı.

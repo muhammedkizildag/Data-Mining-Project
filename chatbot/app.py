@@ -1,7 +1,7 @@
 import streamlit as st
 import joblib
 import json
-import numpy as np
+import pandas as pd
 import os
 
 from groq import Groq
@@ -53,16 +53,14 @@ def load_model():
 
 @st.cache_data
 def load_configs():
-    with open(os.path.join(BASE_DIR, "scaler_params.json"), "r", encoding="utf-8") as f:
-        scaler = json.load(f)
     with open(os.path.join(BASE_DIR, "feature_config.json"), "r", encoding="utf-8") as f:
         features = json.load(f)
     with open(os.path.join(BASE_DIR, "reference_stats.json"), "r", encoding="utf-8") as f:
         ref_stats = json.load(f)
-    return scaler, features, ref_stats
+    return features, ref_stats
 
-model = load_model()
-scaler_params, feature_config, reference_stats = load_configs()
+pipeline = load_model()
+feature_config, reference_stats = load_configs()
 
 FEATURE_ORDER = list(feature_config.keys())
 
@@ -81,28 +79,18 @@ LLM_MODEL = "llama-3.3-70b-versatile"
 # ============================================================
 # YARDIMCI FONKSİYONLAR
 # ============================================================
-def normalize_value(feature_name, raw_value):
-    raw_value = float(raw_value)
-    params = scaler_params[feature_name]
-    mn, mx = params['min'], params['max']
-    if mx == mn:
-        return 0.0
-    return (raw_value - mn) / (mx - mn)
-
 def predict_student(collected_data):
     input_values = []
     for feat in FEATURE_ORDER:
         if feat in collected_data:
-            raw_val = collected_data[feat]
+            raw_val = float(collected_data[feat])
         else:
-            raw_val = feature_config[feat]['default']
-        normalized = normalize_value(feat, raw_val)
-        normalized = max(0.0, min(1.0, normalized))
-        input_values.append(normalized)
+            raw_val = float(feature_config[feat]['default'])
+        input_values.append(raw_val)
 
-    X = np.array([input_values])
-    prediction = model.predict(X)[0]
-    probabilities = model.predict_proba(X)[0]
+    X = pd.DataFrame([input_values], columns=FEATURE_ORDER)
+    prediction = pipeline.predict(X)[0]
+    probabilities = pipeline.predict_proba(X)[0]
     return prediction, probabilities
 
 def get_feature_comparison(collected_data):

@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 import joblib
 import json
 
@@ -23,18 +22,6 @@ features = [
     'Curricular units 2nd sem (enrolled)', 'Curricular units 2nd sem (evaluations)',
     'Curricular units 2nd sem (approved)', 'Curricular units 2nd sem (grade)'
 ]
-
-scaler_params = {}
-for col in features:
-    scaler_params[col] = {
-        'min': float(df_raw[col].min()),
-        'max': float(df_raw[col].max())
-    }
-
-with open("chatbot/scaler_params.json", "w", encoding="utf-8") as f:
-    json.dump(scaler_params, f, ensure_ascii=False, indent=2)
-
-print(f"\n  Scaler parametreleri kaydedildi: chatbot/scaler_params.json")
 
 feature_config = {
     "Marital status": {

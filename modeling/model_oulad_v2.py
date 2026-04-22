@@ -6,6 +6,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, StratifiedKFold
+from sklearn.pipeline import Pipeline
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier
@@ -32,6 +33,7 @@ target_names = ['Withdrawn', 'Fail', 'Pass']
 
 print("=" * 70)
 print("  MODELLEME v2 — OULAD (Feature Eng. + XGBoost)")
+print("  Pipeline yapısı: MinMaxScaler + Model birlikte")
 print("=" * 70)
 
 # ============================================================
@@ -77,23 +79,10 @@ print(f"  Train: {X_train.shape[0]} satır")
 print(f"  Test:  {X_test.shape[0]} satır")
 
 # ============================================================
-# NORMALİZASYON (sadece train üzerinde fit — data leakage önlemi)
+# FEATURE SELECTION — MI (raw train verisi üzerinde, Pipeline dışında)
 # ============================================================
 print("\n" + "=" * 70)
-print("  NORMALİZASYON (train-fit, test-transform)")
-print("=" * 70)
-
-scaler = MinMaxScaler()
-X_train = pd.DataFrame(scaler.fit_transform(X_train), columns=X_train.columns, index=X_train.index)
-X_test = pd.DataFrame(scaler.transform(X_test), columns=X_test.columns, index=X_test.index)
-
-print(f"  Tüm özellikler (orijinal + türetilmiş) train üzerinde normalize edildi.")
-
-# ============================================================
-# FEATURE SELECTION — MI (sadece train üzerinde)
-# ============================================================
-print("\n" + "=" * 70)
-print("  FEATURE SELECTION — Mutual Information (train only)")
+print("  FEATURE SELECTION — Mutual Information (raw train, Pipeline dışında)")
 print("=" * 70)
 
 mi_scores = mutual_info_classif(X_train, y_train, random_state=42)
@@ -114,60 +103,62 @@ else:
     print(f"\n  Tüm özellikler MI >= 0.01, çıkarılan yok.")
 
 # ============================================================
-# HİPERPARAMETRE OPTİMİZASYONU
+# PIPELINE TABANLI HİPERPARAMETRE OPTİMİZASYONU
 # ============================================================
 print("\n" + "=" * 70)
-print("  HİPERPARAMETRE OPTİMİZASYONU (GridSearchCV)")
+print("  HİPERPARAMETRE OPTİMİZASYONU (Pipeline + GridSearchCV)")
+print("  Scaler her CV fold'unda sadece training kısmından fit edilir")
 print("=" * 70)
 
 kf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
 print("\n  [kNN]")
+knn_pipe = Pipeline([('scaler', MinMaxScaler()), ('model', KNeighborsClassifier())])
 knn_params = {
-    'n_neighbors': [1, 3, 5, 7, 9, 11, 13, 15],
-    'metric': ['euclidean', 'manhattan']
+    'model__n_neighbors': [1, 3, 5, 7, 9, 11, 13, 15],
+    'model__metric': ['euclidean', 'manhattan']
 }
-knn_grid = GridSearchCV(KNeighborsClassifier(), knn_params, cv=kf, scoring='f1_weighted', n_jobs=-1)
+knn_grid = GridSearchCV(knn_pipe, knn_params, cv=kf, scoring='f1_weighted', n_jobs=-1)
 knn_grid.fit(X_train, y_train)
 print(f"  En iyi: {knn_grid.best_params_} → CV F1: %{knn_grid.best_score_*100:.2f}")
 
 print("\n  [Naive Bayes]")
-nb_model = GaussianNB()
-nb_model.fit(X_train, y_train)
-nb_cv = cross_val_score(nb_model, X_train, y_train, cv=kf, scoring='f1_weighted')
+nb_pipe = Pipeline([('scaler', MinMaxScaler()), ('model', GaussianNB())])
+nb_pipe.fit(X_train, y_train)
+nb_cv = cross_val_score(nb_pipe, X_train, y_train, cv=kf, scoring='f1_weighted')
 print(f"  CV F1: %{nb_cv.mean()*100:.2f}")
 
 print("\n  [Decision Tree]")
+dt_pipe = Pipeline([('scaler', MinMaxScaler()), ('model', DecisionTreeClassifier(random_state=42))])
 dt_params = {
-    'max_depth': [3, 5, 7, 10, 15, None],
-    'min_samples_split': [2, 5, 10],
-    'min_samples_leaf': [1, 2, 5]
+    'model__max_depth': [3, 5, 7, 10, 15, None],
+    'model__min_samples_split': [2, 5, 10],
+    'model__min_samples_leaf': [1, 2, 5]
 }
-dt_grid = GridSearchCV(DecisionTreeClassifier(random_state=42), dt_params, cv=kf, scoring='f1_weighted', n_jobs=-1)
+dt_grid = GridSearchCV(dt_pipe, dt_params, cv=kf, scoring='f1_weighted', n_jobs=-1)
 dt_grid.fit(X_train, y_train)
 print(f"  En iyi: {dt_grid.best_params_} → CV F1: %{dt_grid.best_score_*100:.2f}")
 
 print("\n  [Random Forest]")
+rf_pipe = Pipeline([('scaler', MinMaxScaler()), ('model', RandomForestClassifier(random_state=42))])
 rf_params = {
-    'n_estimators': [50, 100, 200, 300],
-    'max_depth': [5, 10, 15, 20, None],
-    'min_samples_split': [2, 5, 10]
+    'model__n_estimators': [50, 100, 200, 300],
+    'model__max_depth': [5, 10, 15, 20, None],
+    'model__min_samples_split': [2, 5, 10]
 }
-rf_grid = GridSearchCV(RandomForestClassifier(random_state=42), rf_params, cv=kf, scoring='f1_weighted', n_jobs=-1)
+rf_grid = GridSearchCV(rf_pipe, rf_params, cv=kf, scoring='f1_weighted', n_jobs=-1)
 rf_grid.fit(X_train, y_train)
 print(f"  En iyi: {rf_grid.best_params_} → CV F1: %{rf_grid.best_score_*100:.2f}")
 
 print("\n  [XGBoost]")
+xgb_pipe = Pipeline([('scaler', MinMaxScaler()), ('model', XGBClassifier(random_state=42, eval_metric='mlogloss', verbosity=0))])
 xgb_params = {
-    'n_estimators': [50, 100, 200, 300],
-    'max_depth': [3, 5, 7, 10],
-    'learning_rate': [0.01, 0.05, 0.1, 0.2],
-    'subsample': [0.8, 1.0]
+    'model__n_estimators': [50, 100, 200, 300],
+    'model__max_depth': [3, 5, 7, 10],
+    'model__learning_rate': [0.01, 0.05, 0.1, 0.2],
+    'model__subsample': [0.8, 1.0]
 }
-xgb_grid = GridSearchCV(
-    XGBClassifier(random_state=42, eval_metric='mlogloss', verbosity=0),
-    xgb_params, cv=kf, scoring='f1_weighted', n_jobs=-1
-)
+xgb_grid = GridSearchCV(xgb_pipe, xgb_params, cv=kf, scoring='f1_weighted', n_jobs=-1)
 xgb_grid.fit(X_train, y_train)
 print(f"  En iyi: {xgb_grid.best_params_} → CV F1: %{xgb_grid.best_score_*100:.2f}")
 
@@ -182,15 +173,15 @@ kf10 = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
 
 optimized_models = {
     "kNN": knn_grid.best_estimator_,
-    "Naive Bayes": nb_model,
+    "Naive Bayes": nb_pipe,
     "Decision Tree": dt_grid.best_estimator_,
     "Random Forest": rf_grid.best_estimator_,
     "XGBoost": xgb_grid.best_estimator_
 }
 
 cv_results = {}
-for name, model in optimized_models.items():
-    scores = cross_val_score(model, X_train, y_train, cv=kf10, scoring='f1_weighted')
+for name, pipe in optimized_models.items():
+    scores = cross_val_score(pipe, X_train, y_train, cv=kf10, scoring='f1_weighted')
     cv_results[name] = scores
     print(f"  {name:20s} → Ort F1: %{scores.mean()*100:.2f} (±{scores.std()*100:.2f})")
 
@@ -212,8 +203,8 @@ print("=" * 70)
 
 final_results = []
 
-for name, model in optimized_models.items():
-    y_pred = model.predict(X_test)
+for name, pipe in optimized_models.items():
+    y_pred = pipe.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
     prec = precision_score(y_test, y_pred, average='weighted', zero_division=0)
     rec = recall_score(y_test, y_pred, average='weighted', zero_division=0)
@@ -237,8 +228,8 @@ print("  SINIF BAZLI METRİKLER")
 print("=" * 70)
 
 best_temp_name = pd.DataFrame(final_results).loc[pd.DataFrame(final_results)['F1-Score'].idxmax(), 'Model']
-best_temp_model = optimized_models[best_temp_name]
-y_pred_best = best_temp_model.predict(X_test)
+best_temp_pipe = optimized_models[best_temp_name]
+y_pred_best = best_temp_pipe.predict(X_test)
 
 print(f"\n  En iyi model: {best_temp_name}")
 print(f"\n  Classification Report:")
@@ -258,8 +249,8 @@ print(f"      → Gerçek bırakma öğrencilerinin %{withdrawn_recall*100:.1f}'
 fig, axes = plt.subplots(2, 3, figsize=(18, 12))
 axes = axes.flatten()
 
-for i, (name, model) in enumerate(optimized_models.items()):
-    y_pred = model.predict(X_test)
+for i, (name, pipe) in enumerate(optimized_models.items()):
+    y_pred = pipe.predict(X_test)
     cm = confusion_matrix(y_test, y_pred)
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axes[i],
                 xticklabels=target_names, yticklabels=target_names)
@@ -320,23 +311,24 @@ plt.savefig(f"{output_dir}/03_model_karsilastirma.png", dpi=150, bbox_inches='ti
 plt.close()
 
 # ============================================================
-# EN İYİ MODELİ KAYDET
+# EN İYİ MODELİ KAYDET (Pipeline: scaler + model birlikte)
 # ============================================================
 print("\n" + "=" * 70)
-print("  EN İYİ MODELİ KAYDET")
+print("  EN İYİ MODELİ KAYDET (Pipeline)")
 print("=" * 70)
 
-best_model = optimized_models[best_model_name]
+best_pipeline = optimized_models[best_model_name]
 model_path = "models/best_model_oulad.pkl"
-joblib.dump(best_model, model_path)
-print(f"  Model: {best_model_name}")
+joblib.dump(best_pipeline, model_path)
+print(f"  Model: {best_model_name} (Pipeline: MinMaxScaler + {best_model_name})")
 print(f"  F1-Score: %{best_f1*100:.2f}")
 print(f"  Kaydedildi: {model_path}")
 
-if hasattr(best_model, 'feature_importances_'):
+actual_model = best_pipeline.named_steps['model']
+if hasattr(actual_model, 'feature_importances_'):
     fi = pd.DataFrame({
         'Özellik': X_train.columns,
-        'Önem': best_model.feature_importances_
+        'Önem': actual_model.feature_importances_
     }).sort_values('Önem', ascending=True)
 
     fig, ax = plt.subplots(figsize=(10, 12))

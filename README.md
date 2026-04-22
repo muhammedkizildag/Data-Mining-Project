@@ -62,7 +62,6 @@ Data-Mining-Project/
 │   ├── app.py
 │   ├── prepare_chatbot.py
 │   ├── feature_config.json
-│   ├── scaler_params.json
 │   └── reference_stats.json
 ├── GUNLUK.md                         # Proje karar günlüğü
 └── requirements.txt
@@ -161,13 +160,12 @@ python chatbot/prepare_chatbot.py
 
 Bu adım chatbotun ihtiyaç duyduğu şu dosyaları üretir/günceller:
 
-- `chatbot/scaler_params.json`
 - `chatbot/feature_config.json`
 - `chatbot/reference_stats.json`
 
 ## Chatbot
 
-Chatbot Streamlit ile çalışır ve Groq API üzerinden `llama-3.3-70b-versatile` modelini kullanır. LLM sohbetten yapılandırılmış öğrenci verisi çıkarır, bu veri normalize edilir ve `models/best_model_dropout_localized.pkl` XGBoost modeline gönderilir.
+Chatbot Streamlit ile çalışır ve Groq API üzerinden `llama-3.3-70b-versatile` modelini kullanır. LLM sohbetten yapılandırılmış öğrenci verisi çıkarır, bu veri `models/best_model_dropout_localized.pkl` dosyasındaki Pipeline'a (MinMaxScaler + XGBoost) ham olarak gönderilir. Normalizasyon Pipeline içinde otomatik yapılır.
 
 ### API anahtarı
 
@@ -205,47 +203,47 @@ Chatbotta kullanılan modeldir. Türkiye bağlamında doğrudan karşılığı z
 
 | Model | F1 |
 |---|---:|
-| kNN | %68.91 |
+| kNN | %67.27 |
 | Naive Bayes | %66.76 |
-| Decision Tree | %71.54 |
-| Random Forest | %73.85 |
-| XGBoost | %75.27 |
+| Decision Tree | %70.57 |
+| Random Forest | %73.44 |
+| XGBoost | %75.10 |
 
 XGBoost sınıf bazlı sonuçları:
 
 | Sınıf | Precision | Recall | F1 |
 |---|---:|---:|---:|
-| Dropout | %80.09 | %72.37 | %76.04 |
-| Enrolled | %51.24 | %42.86 | %46.67 |
-| Graduate | %81.03 | %90.50 | %85.51 |
+| Dropout | %78.88 | %72.60 | %75.61 |
+| Enrolled | %51.53 | %42.44 | %46.54 |
+| Graduate | %80.65 | %89.89 | %85.02 |
 
 Kaydedilen model ve yardımcı dosyalar:
 
 ```text
-models/best_model_dropout_localized.pkl
-models/dropout_localized_features.pkl
-models/dropout_localized_scaler_params.json
+models/best_model_dropout_localized.pkl    # Pipeline: MinMaxScaler + XGBoost
+models/dropout_localized_features.pkl      # Özellik listesi
+models/dropout_localized_scaler_params.json # Scaler parametreleri (dokümantasyon)
 ```
 
 ### OULAD v2
 
 | Model | F1 |
 |---|---:|
-| kNN | %76.96 |
+| kNN | %77.18 |
 | Naive Bayes | %69.05 |
-| Decision Tree | %77.74 |
-| Random Forest | %80.13 |
-| XGBoost | %80.40 |
+| Decision Tree | %77.55 |
+| Random Forest | %80.03 |
+| XGBoost | %80.48 |
 
 XGBoost sınıf bazlı sonuçları:
 
 | Sınıf | Precision | Recall | F1 |
 |---|---:|---:|---:|
-| Withdrawn | %74.87 | %83.13 | %78.79 |
-| Fail | %61.24 | %45.32 | %52.09 |
-| Pass | %92.36 | %96.64 | %94.45 |
+| Withdrawn | %75.26 | %82.87 | %78.88 |
+| Fail | %60.82 | %45.84 | %52.28 |
+| Pass | %92.38 | %96.64 | %94.46 |
 
-OULAD modelinde eski `%94` civarı skorların ana nedeni `unregistered` özelliğinin hedef değişkene çok yakın bilgi taşımasıydı. Bu özellik çıkarıldıktan sonra temiz OULAD v2 XGBoost F1 skoru `%80.40` olarak raporlanır.
+OULAD modelinde eski `%94` civarı skorların ana nedeni `unregistered` özelliğinin hedef değişkene çok yakın bilgi taşımasıydı. Bu özellik çıkarıldıktan sonra temiz OULAD v2 XGBoost F1 skoru `%80.48` olarak raporlanır.
 
 ### Legacy Sonuçlar
 
@@ -261,8 +259,7 @@ Student Habits veri seti ilk aşamada kullanılmış, fakat sentetik olması ve 
 
 - OULAD tarafında `unregistered` target leakage özelliği çıkarılmıştır. Eski `%94` civarı skorlar metodolojik olarak temiz final skor kabul edilmemelidir.
 - OULAD modeli dönem sonu/durum sınıflandırması olarak konumlandırılmalıdır. Erken uyarı sistemi olarak kullanılacaksa yalnızca belirli bir zaman kesitine kadar oluşan VLE ve assessment verileriyle yeniden tasarlanmalıdır.
-- Güncel ana modelleme dosyalarında scaler train verisine fit edilir ve test verisine sadece transform uygulanır. OULAD v2'de mutual information feature selection da train set üzerinde hesaplanır.
-- Daha katı üretim standardı için scaler, feature selection ve model adımları `sklearn.pipeline.Pipeline` içine alınabilir.
+- Güncel modelleme dosyalarında scaler ve model `sklearn.pipeline.Pipeline` içinde birlikte çalışır. CV her fold'unda scaler sadece o fold'un training kısmından fit edilir. OULAD v2'de MI feature selection Pipeline dışında raw train verisi üzerinde yapılır; bu bilinçli bir tercih olup pratikte etkisi yoktur (çıkarılan 8 özelliğin MI skorları sıfıra yakındır).
 - Başında legacy uyarısı bulunan eski model ve ablation dosyaları final sonuç üretmek için değil, proje geçmişini göstermek için saklanır.
 - API anahtarı hiçbir koşulda repoya commit edilmemelidir.
 
