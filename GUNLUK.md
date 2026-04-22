@@ -1039,3 +1039,41 @@ Groq API key gerekli (ücretsiz): https://console.groq.com/keys
    - Dolaylı cevap anlama talimatı eklendi
    - Cevap uzunluğu sınırı: 2-3 cümle
    - DATA değerlerinin her zaman sayısal (int/float) olması gerektiği vurgulandı
+
+---
+
+## Chatbot İkinci Test Turu ve Kapsamlı İyileştirmeler (22 Nisan 2026)
+
+### Test Yöntemi
+
+5 farklı senaryo ile Groq API üzerinden otomatik test yapıldı:
+1. Başarılı öğrenci (yaş + not dönüşümü)
+2. Zorlanan öğrenci (dil + typo)
+3. Dolaylı cevap veren öğrenci
+4. İngilizce konuşma denemesi
+5. Çok az bilgi veren öğrenci
+
+### İkinci Turda Tespit Edilen Sorunlar
+
+| # | Sorun | Ciddiyet | Çözüm |
+|---|-------|----------|-------|
+| 1 | LLM Türkçe feature adları kullanıyor ("Cinsiyet" vs "Gender") | Kritik | Kod tarafında TR→EN eşleme tablosu eklendi |
+| 2 | LLM kategorik değerleri metin gönderiyor ("Kadın" vs 0) | Kritik | Kategorik değer→sayı dönüşüm tablosu eklendi |
+| 3 | Feature adı yazım hatası ("Curicular" vs "Curricular") | Kritik | Typo düzeltme sözlüğü + fuzzy match iyileştirmesi |
+| 4 | 4'lük not sistemi dönüştürülmüyor (1.2 kalıyor, 6.0 olmalı) | Yüksek | Kod tarafında otomatik dönüşüm: grade ≤ 4.0 → (val/4)*20 |
+| 5 | null/None değerler gönderiliyor | Yüksek | clean_extracted_data'da null filtreleme |
+| 6 | Çince karakter sızması ("改善") | Orta | clean_non_turkish() fonksiyonu eklendi |
+| 7 | Yaş vs kayıt yaşı karışıklığı | Orta | Prompt'ta yaş hesaplama kuralı eklendi |
+| 8 | Not dönüşümünü öğrenciye gösterme | Orta | Prompt'ta "GİZLİ" dönüşüm kuralı |
+| 9 | Fuzzy match tek kelimelik feature'lara yanlış eşleşme | Düşük | Minimum 2 ortak kelime zorunlu |
+
+### Uygulanan Kod Düzeltmeleri
+
+1. **TR→EN Feature Eşleme Tablosu**: 30+ Türkçe feature adı → İngilizce karşılık
+2. **Kategorik Değer Dönüşüm Tablosu**: "Kadın"→0, "Erkek"→1, "Evet"→1, "Hayır"→0 vb.
+3. **Typo Düzeltme Sözlüğü**: "curicular"→"curricular" vb.
+4. **Otomatik Not Dönüşümü**: Grade alanlarında değer ≤ 4.0 ise (4'lük/4.0)×20 uygulanır
+5. **Null Filtreleme**: None, "null", "" değerler otomatik atlanır
+6. **Yabancı Karakter Temizleme**: Çince/Japonca/Korece karakterler siliniyor
+7. **Fuzzy Match İyileştirmesi**: Tek kelimelik feature adlarına yanlış eşleşme önlendi
+8. **System Prompt v3**: Dil, yaş, not, DATA kuralları güçlendirildi
