@@ -1345,3 +1345,23 @@ Skorlarda değişiklik yok — Pipeline metodolojik düzeltme, performans etkisi
 - 2. dönem verileri eksikse ve 1. dönem karşılıkları varsa, 1. dönem değerleri 2. döneme kopyalanır
 - Her iki dönem de eksikse default değerler kullanılmaya devam eder
 - Öğrencinin mevcut trendi korunur: 1. dönemde 3 ders geçmiş öğrencinin 2. dönemi de 3 olarak varsayılır, 5 değil
+
+---
+
+## SHAP Açıklanabilirlik Analizi (22 Nisan 2026)
+
+### Amaç
+
+Model yalnızca olasılık üretmekle kalmasın, hangi değişkenlerin tahmini daha çok etkilediği de raporlanabilsin istendi. SHAP bu amaçla eklendi.
+
+### Uygulama
+
+- Chatbot içine canlı SHAP hesabı eklenmedi; performans ve bağımlılık riskini azaltmak için ayrı analiz script'i yazıldı.
+- `modeling/shap_dropout_localized.py` dosyası eklendi.
+- Script, `models/best_model_dropout_localized.pkl` içindeki Pipeline'ı yükler.
+- Test setini aynı feature sırasıyla hazırlar, Pipeline içindeki scaler ile dönüştürür ve XGBoost'un `pred_contribs=True` mekanizmasıyla SHAP katkı değerlerini hesaplar.
+- Global ve sınıf bazlı SHAP önem tabloları/grafikleri `modeling/plots_shap_dropout_localized/` altına kaydedilir.
+
+### Not
+
+SHAP çıktıları nedensellik iddiası değildir. Yalnızca modelin mevcut tahmin mekanizmasında hangi özelliklerin daha etkili göründüğünü açıklar.
