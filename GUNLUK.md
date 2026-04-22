@@ -1014,3 +1014,28 @@ streamlit run chatbot/app.py
 ```
 
 Groq API key gerekli (ücretsiz): https://console.groq.com/keys
+
+---
+
+## Chatbot İlk Test ve Düzeltmeler (22 Nisan 2026)
+
+### Tespit Edilen Sorunlar
+
+| # | Sorun | Detay |
+|---|-------|-------|
+| 1 | **Type Error** | `unsupported operand type(s) for -: 'str' and 'float'` — LLM değerleri string olarak gönderince `normalize_value` patladı |
+| 2 | **Türkçe-İngilizce karışımı** | LLM cevaplarında "sometimes", "information" gibi İngilizce kelimeler karışıyordu |
+| 3 | **Not sistemi uyumsuzluğu** | Öğrenci "4 üzerinden 2.4" dedi, model 0-20 arası bekliyor, dönüşüm yoktu |
+| 4 | **Soru tekrarı** | Dolaylı cevapları anlamıyordu, aynı soruyu tekrar soruyordu |
+| 5 | **Uzun cevaplar** | LLM gereksiz uzun ve "ders veren" tonda yazıyordu |
+
+### Yapılan Düzeltmeler
+
+1. **Bug fix:** `normalize_value()` fonksiyonuna `float()` dönüşümü eklendi — string değerler artık otomatik sayıya çevriliyor
+2. **System prompt güçlendirildi:**
+   - Kesin Türkçe kuralı: İngilizce kelime kullanımı yasaklandı
+   - Not sistemi dönüşüm talimatları: 4'lük → 20'lik, 100'lük → 20'lik otomatik çevirme
+   - Ders sayısı hesaplama: "alttan X dersim var" → alınan - geçilen mantığı
+   - Dolaylı cevap anlama talimatı eklendi
+   - Cevap uzunluğu sınırı: 2-3 cümle
+   - DATA değerlerinin her zaman sayısal (int/float) olması gerektiği vurgulandı
