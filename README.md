@@ -80,10 +80,10 @@ source .venv/bin/activate
 pip install --upgrade pip
 ```
 
-Mevcut `requirements.txt` UTF-16 formatındadır. Bazı ortamlarda doğrudan `pip install -r requirements.txt` sorun çıkarabilir. Gerekli temel paketler şunlardır:
+Bağımlılıklar `requirements.txt` dosyasında listelenmiştir:
 
 ```bash
-pip install pandas numpy matplotlib seaborn scikit-learn xgboost imbalanced-learn joblib streamlit groq
+pip install -r requirements.txt
 ```
 
 ## Çalıştırma Sırası
