@@ -1,3 +1,7 @@
+# ⚠️ UYARI: Bu dosya artık aktif değildir.
+# Student Habits veri seti OULAD ile değiştirilmiştir.
+# Güncel preprocessing: prepare_oulad.py ve preprocess_dropout.py
+
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler

@@ -1,6 +1,6 @@
 # Öğrenci Başarı ve Terk Riski Tahmini
 
-Bu proje, veri madenciliği dersi kapsamında hazırlanmış bir öğrenci başarı/terk riski tahmin çalışmasıdır. Proje; veri seti araştırması, keşifsel veri analizi, ön işleme, sınıflandırma modelleri, ablation study, Türkiye'ye uyarlanmış modelleme ve Streamlit tabanlı akademik danışman chatbotundan oluşur.
+Bu proje, veri madenciliği dersi kapsamında hazırlanmış bir öğrenci başarı/terk riski tahmin çalışmasıdır. Proje; veri seti araştırması, keşifsel veri analizi, ön işleme, sınıflandırma modelleri, metodolojik hata düzeltmeleri, Türkiye'ye uyarlanmış modelleme ve Streamlit tabanlı akademik danışman chatbotundan oluşur.
 
 Ana hedef yalnızca yüksek doğruluklu bir model üretmek değil, eğitilmiş modeli öğrencinin doğal dille etkileşime geçebileceği bir danışman arayüzüne bağlamaktır.
 
@@ -42,35 +42,33 @@ Data-Mining-Project/
 │   ├── habits_processed.csv
 │   └── oulad_processed.csv
 ├── modeling/
-│   ├── model_dropout.py
-│   ├── model_dropout_v2.py
-│   ├── model_dropout_localized.py
-│   ├── model_habits.py
-│   ├── model_habits_v2.py
-│   ├── model_oulad.py
-│   ├── model_oulad_v2.py
-│   ├── ablation_study.py
-│   ├── ablation_study_oulad.py
+│   ├── model_dropout_localized.py     # Güncel chatbot/Dropout modeli
+│   ├── model_oulad_v2.py              # Güncel OULAD modeli
+│   ├── model_dropout.py               # Legacy baseline
+│   ├── model_dropout_v2.py            # Legacy, aktif değil
+│   ├── model_habits.py                # Legacy
+│   ├── model_habits_v2.py             # Legacy, aktif değil
+│   ├── model_oulad.py                 # Legacy baseline
+│   ├── ablation_study.py              # Legacy
+│   ├── ablation_study_oulad.py        # Legacy
 │   └── plots_*/
 ├── models/
-│   ├── best_model_dropout.pkl
 │   ├── best_model_dropout_localized.pkl
-│   ├── best_model_habits.pkl
 │   ├── best_model_oulad.pkl
-│   └── dropout_localized_features.pkl
+│   ├── best_model_habits.pkl
+│   ├── dropout_localized_features.pkl
+│   └── dropout_localized_scaler_params.json
 ├── chatbot/
 │   ├── app.py
 │   ├── prepare_chatbot.py
 │   ├── feature_config.json
 │   ├── scaler_params.json
 │   └── reference_stats.json
-├── gunluk.md                         # Proje karar günlüğü
-├── main.py                           # Eski/bağlayıcı olmayan başlangıç kodu
-├── dropout.py                        # Eski/bağlayıcı olmayan başlangıç kodu
+├── GUNLUK.md                         # Proje karar günlüğü
 └── requirements.txt
 ```
 
-`main.py` ve `dropout.py` ilk deneme dosyalarıdır. Güncel akış için `eda/`, `preprocessing/`, `modeling/` ve `chatbot/` klasörleri esas alınmalıdır.
+Güncel sonuçlar için esas dosyalar `preprocessing/preprocess_dropout.py`, `preprocessing/prepare_oulad.py`, `modeling/model_dropout_localized.py`, `modeling/model_oulad_v2.py` ve `chatbot/app.py` dosyalarıdır. Bazı eski model/ablation dosyaları geçmiş karşılaştırmaları korumak için repoda tutulur; başlarında legacy uyarısı bulunan bu dosyalar güncel metodolojik sonuç olarak kullanılmamalıdır.
 
 ## Kurulum
 
@@ -117,53 +115,45 @@ unzip datasets/oulad/oulad.zip -d datasets/oulad
 ```bash
 python preprocessing/preprocess_dropout.py
 python preprocessing/prepare_oulad.py
-python preprocessing/preprocess_habits.py
 ```
 
 Çıktılar:
 
 | Dosya | Boyut | Hedef dağılımı |
 |---|---:|---|
-| `preprocessing/dropout_processed.csv` | 4.424 x 26 | 0: 1421, 1: 794, 2: 2209 |
-| `preprocessing/oulad_processed.csv` | 32.593 x 31 | 0: 10156, 1: 7052, 2: 15385 |
-| `preprocessing/habits_processed.csv` | 1.000 x 15 | 0: 131, 1: 492, 2: 377 |
+| `preprocessing/dropout_processed.csv` | 4.424 x 37 | 0: 1421, 1: 794, 2: 2209 |
+| `preprocessing/oulad_processed.csv` | 32.593 x 39 | 0: 10156, 1: 7052, 2: 15385 |
 
-### 3. Modelleme
+Bu aşamada scaler ve mutual information feature selection uygulanmaz. Bu işlemler data leakage oluşmaması için modelleme dosyalarında train/test ayrımından sonra yapılır.
 
-Ana modeller:
+### 3. Güncel modelleme
+
+Güncel ve raporlanabilir ana modeller:
+
+```bash
+python modeling/model_dropout_localized.py
+python modeling/model_oulad_v2.py
+```
+
+`model_dropout_localized.py`, chatbotta kullanılan Türkiye'ye uyarlanmış Dropout UCI modelini üretir. `model_oulad_v2.py`, `unregistered` target leakage özelliği çıkarılmış OULAD modelidir.
+
+Legacy/geçmiş karşılaştırma dosyaları:
 
 ```bash
 python modeling/model_dropout.py
 python modeling/model_dropout_v2.py
-python modeling/model_oulad.py
-python modeling/model_oulad_v2.py
-```
-
-Student Habits geçmiş/karşılaştırma modelleri:
-
-```bash
 python modeling/model_habits.py
 python modeling/model_habits_v2.py
-```
-
-Türkiye'ye uyarlanmış chatbot modeli:
-
-```bash
-python modeling/model_dropout_localized.py
-```
-
-Model çıktıları `models/` klasörüne, grafikler `modeling/plots_*` klasörlerine kaydedilir.
-
-### 4. Ablation study
-
-```bash
+python modeling/model_oulad.py
 python modeling/ablation_study.py
 python modeling/ablation_study_oulad.py
 ```
 
-Bu dosyalar XGBoost, feature engineering ve SMOTE gibi iyileştirmelerin tekil katkılarını karşılaştırır.
+Bu legacy dosyalar güncel preprocessing çıktılarıyla birebir uyumlu olmayabilir ve bazı eski dosyalarda split öncesi scaler/feature engineering kullanımı bulunduğu için güncel final sonuç olarak raporlanmamalıdır.
 
-### 5. Chatbot hazırlığı
+Model çıktıları `models/` klasörüne, grafikler `modeling/plots_*` klasörlerine kaydedilir.
+
+### 4. Chatbot hazırlığı
 
 ```bash
 python chatbot/prepare_chatbot.py
@@ -205,36 +195,6 @@ Chatbot akışı:
 
 ## Model Sonuçları
 
-### Student Habits v2
-
-| Model | Accuracy | Precision | Recall | F1 |
-|---|---:|---:|---:|---:|
-| kNN | %56.33 | %57.40 | %56.33 | %56.74 |
-| Naive Bayes | %67.33 | %71.47 | %67.33 | %68.20 |
-| Decision Tree | %65.00 | %65.23 | %65.00 | %65.03 |
-| Random Forest | %80.33 | %80.35 | %80.33 | %80.32 |
-| XGBoost | %80.67 | %80.67 | %80.67 | %80.62 |
-
-### Dropout UCI v2
-
-| Model | Accuracy | Precision | Recall | F1 |
-|---|---:|---:|---:|---:|
-| kNN | %74.77 | %73.43 | %74.77 | %73.72 |
-| Naive Bayes | %74.32 | %74.65 | %74.32 | %74.10 |
-| Decision Tree | %75.98 | %74.32 | %75.98 | %74.62 |
-| Random Forest | %77.71 | %76.46 | %77.71 | %76.64 |
-| XGBoost | %78.01 | %77.04 | %78.01 | %77.26 |
-
-### OULAD v2
-
-| Model | Accuracy | Precision | Recall | F1 |
-|---|---:|---:|---:|---:|
-| kNN | %93.81 | %93.85 | %93.81 | %93.68 |
-| Naive Bayes | %90.61 | %90.50 | %90.61 | %90.38 |
-| Decision Tree | %92.80 | %92.75 | %92.80 | %92.68 |
-| Random Forest | %94.72 | %94.70 | %94.72 | %94.66 |
-| XGBoost | %94.88 | %94.86 | %94.88 | %94.82 |
-
 ### Türkiye'ye uyarlanmış Dropout modeli
 
 Chatbotta kullanılan modeldir. Türkiye bağlamında doğrudan karşılığı zayıf olan üç özellik çıkarılmıştır:
@@ -251,11 +211,45 @@ Chatbotta kullanılan modeldir. Türkiye bağlamında doğrudan karşılığı z
 | Random Forest | %73.85 |
 | XGBoost | %75.27 |
 
-Kaydedilen model:
+XGBoost sınıf bazlı sonuçları:
+
+| Sınıf | Precision | Recall | F1 |
+|---|---:|---:|---:|
+| Dropout | %80.09 | %72.37 | %76.04 |
+| Enrolled | %51.24 | %42.86 | %46.67 |
+| Graduate | %81.03 | %90.50 | %85.51 |
+
+Kaydedilen model ve yardımcı dosyalar:
 
 ```text
 models/best_model_dropout_localized.pkl
+models/dropout_localized_features.pkl
+models/dropout_localized_scaler_params.json
 ```
+
+### OULAD v2
+
+| Model | F1 |
+|---|---:|
+| kNN | %76.96 |
+| Naive Bayes | %69.05 |
+| Decision Tree | %77.74 |
+| Random Forest | %80.13 |
+| XGBoost | %80.40 |
+
+XGBoost sınıf bazlı sonuçları:
+
+| Sınıf | Precision | Recall | F1 |
+|---|---:|---:|---:|
+| Withdrawn | %74.87 | %83.13 | %78.79 |
+| Fail | %61.24 | %45.32 | %52.09 |
+| Pass | %92.36 | %96.64 | %94.45 |
+
+OULAD modelinde eski `%94` civarı skorların ana nedeni `unregistered` özelliğinin hedef değişkene çok yakın bilgi taşımasıydı. Bu özellik çıkarıldıktan sonra temiz OULAD v2 XGBoost F1 skoru `%80.40` olarak raporlanır.
+
+### Legacy Sonuçlar
+
+Student Habits, Dropout UCI v1/v2 ve eski ablation çalışmaları proje gelişim sürecini göstermek için korunur. Ancak final metodolojik değerlendirmede yukarıdaki iki güncel model esas alınmalıdır.
 
 ## Veri Seti Kararları
 
@@ -265,11 +259,13 @@ Student Habits veri seti ilk aşamada kullanılmış, fakat sentetik olması ve 
 
 ## Önemli Notlar
 
-- OULAD modelinde `unregistered` gibi hedefe çok yakın sinyaller bulunduğu için performans oldukça yüksektir. Bu model dönem sonu/durum sınıflandırması için güçlüdür; erken uyarı sistemi olarak kullanılacaksa zaman kesiti ve özellik seçimi yeniden tasarlanmalıdır.
-- Ön işleme dosyaları mevcut haliyle tüm veri üzerinde scaler/feature selection uygular. Raporlamada bu tercih açıklanmalı; daha katı üretim standardı için `Pipeline` ve train-only fit yaklaşımı tercih edilmelidir.
-- `main.py` ve `dropout.py` eski başlangıç kodlarıdır; güncel deney sonuçları için `modeling/` altındaki dosyalar kullanılmalıdır.
+- OULAD tarafında `unregistered` target leakage özelliği çıkarılmıştır. Eski `%94` civarı skorlar metodolojik olarak temiz final skor kabul edilmemelidir.
+- OULAD modeli dönem sonu/durum sınıflandırması olarak konumlandırılmalıdır. Erken uyarı sistemi olarak kullanılacaksa yalnızca belirli bir zaman kesitine kadar oluşan VLE ve assessment verileriyle yeniden tasarlanmalıdır.
+- Güncel ana modelleme dosyalarında scaler train verisine fit edilir ve test verisine sadece transform uygulanır. OULAD v2'de mutual information feature selection da train set üzerinde hesaplanır.
+- Daha katı üretim standardı için scaler, feature selection ve model adımları `sklearn.pipeline.Pipeline` içine alınabilir.
+- Başında legacy uyarısı bulunan eski model ve ablation dosyaları final sonuç üretmek için değil, proje geçmişini göstermek için saklanır.
 - API anahtarı hiçbir koşulda repoya commit edilmemelidir.
 
 ## Proje Günlüğü
 
-Ayrıntılı karar süreci, veri seti araştırması, modelleme gerekçeleri ve sonuç yorumları `gunluk.md` dosyasında tutulmuştur. README güncel çalıştırma ve proje haritası için, `gunluk.md` ise ayrıntılı rapor/karar geçmişi için kullanılmalıdır.
+Ayrıntılı karar süreci, veri seti araştırması, modelleme gerekçeleri ve sonuç yorumları `GUNLUK.md` dosyasında tutulmuştur. README güncel çalıştırma ve proje haritası için, `GUNLUK.md` ise ayrıntılı rapor/karar geçmişi için kullanılmalıdır.

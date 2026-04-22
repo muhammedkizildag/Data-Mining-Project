@@ -11,9 +11,10 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
-from sklearn.metrics import (accuracy_score, precision_score, recall_score,
-                             f1_score, confusion_matrix)
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.feature_selection import mutual_info_classif
+from sklearn.metrics import (accuracy_score, precision_score, recall_score,
+                             f1_score, confusion_matrix, classification_report)
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -56,8 +57,6 @@ X['engagement_score'] = X['total_clicks'] * X['total_vle_days'] * X['num_distinc
 new_cols = ['score_per_assessment', 'click_per_day', 'assessment_completion_rate',
             'forum_ratio', 'quiz_ratio', 'resource_ratio', 'score_consistency',
             'early_late_ratio', 'tma_cma_score_diff', 'engagement_score']
-scaler = MinMaxScaler()
-X[new_cols] = scaler.fit_transform(X[new_cols])
 
 print(f"  Yeni özellik sayısı: {X.shape[1]} (+{len(new_cols)} türetilmiş)")
 for col in new_cols:
@@ -76,6 +75,43 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 print(f"  Train: {X_train.shape[0]} satır")
 print(f"  Test:  {X_test.shape[0]} satır")
+
+# ============================================================
+# NORMALİZASYON (sadece train üzerinde fit — data leakage önlemi)
+# ============================================================
+print("\n" + "=" * 70)
+print("  NORMALİZASYON (train-fit, test-transform)")
+print("=" * 70)
+
+scaler = MinMaxScaler()
+X_train = pd.DataFrame(scaler.fit_transform(X_train), columns=X_train.columns, index=X_train.index)
+X_test = pd.DataFrame(scaler.transform(X_test), columns=X_test.columns, index=X_test.index)
+
+print(f"  Tüm özellikler (orijinal + türetilmiş) train üzerinde normalize edildi.")
+
+# ============================================================
+# FEATURE SELECTION — MI (sadece train üzerinde)
+# ============================================================
+print("\n" + "=" * 70)
+print("  FEATURE SELECTION — Mutual Information (train only)")
+print("=" * 70)
+
+mi_scores = mutual_info_classif(X_train, y_train, random_state=42)
+mi_df = pd.DataFrame({'Özellik': X_train.columns, 'MI': mi_scores}).sort_values('MI', ascending=False)
+
+print(f"\n  MI Skorları (Top 15):")
+for _, row in mi_df.head(15).iterrows():
+    bar = "█" * int(row['MI'] * 50)
+    print(f"    {row['Özellik']:35s} MI={row['MI']:.4f} {bar}")
+
+low_mi = mi_df[mi_df['MI'] < 0.01]['Özellik'].tolist()
+if low_mi:
+    print(f"\n  MI < 0.01 olan {len(low_mi)} özellik çıkarılıyor: {low_mi}")
+    X_train = X_train.drop(columns=low_mi)
+    X_test = X_test.drop(columns=low_mi)
+    print(f"  Kalan özellik sayısı: {X_train.shape[1]}")
+else:
+    print(f"\n  Tüm özellikler MI >= 0.01, çıkarılan yok.")
 
 # ============================================================
 # HİPERPARAMETRE OPTİMİZASYONU
@@ -194,6 +230,29 @@ for name, model in optimized_models.items():
     print(f"  F1-Score:  %{f1*100:.2f}")
 
 # ============================================================
+# SINIF BAZLI METRİKLER (Class-wise)
+# ============================================================
+print("\n" + "=" * 70)
+print("  SINIF BAZLI METRİKLER")
+print("=" * 70)
+
+best_temp_name = pd.DataFrame(final_results).loc[pd.DataFrame(final_results)['F1-Score'].idxmax(), 'Model']
+best_temp_model = optimized_models[best_temp_name]
+y_pred_best = best_temp_model.predict(X_test)
+
+print(f"\n  En iyi model: {best_temp_name}")
+print(f"\n  Classification Report:")
+print(classification_report(y_test, y_pred_best, target_names=target_names, digits=4))
+
+f1_macro = f1_score(y_test, y_pred_best, average='macro')
+print(f"  Weighted F1: %{f1_score(y_test, y_pred_best, average='weighted')*100:.2f}")
+print(f"  Macro F1:    %{f1_macro*100:.2f}")
+
+withdrawn_recall = recall_score(y_test, y_pred_best, average=None)[0]
+print(f"\n  ⚠️  Withdrawn Recall: %{withdrawn_recall*100:.2f}")
+print(f"      → Gerçek bırakma öğrencilerinin %{withdrawn_recall*100:.1f}'ini yakalıyoruz")
+
+# ============================================================
 # CONFUSION MATRIX
 # ============================================================
 fig, axes = plt.subplots(2, 3, figsize=(18, 12))
@@ -276,7 +335,7 @@ print(f"  Kaydedildi: {model_path}")
 
 if hasattr(best_model, 'feature_importances_'):
     fi = pd.DataFrame({
-        'Özellik': X.columns,
+        'Özellik': X_train.columns,
         'Önem': best_model.feature_importances_
     }).sort_values('Önem', ascending=True)
 

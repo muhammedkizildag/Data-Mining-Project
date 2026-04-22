@@ -1077,3 +1077,76 @@ Groq API key gerekli (ücretsiz): https://console.groq.com/keys
 6. **Yabancı Karakter Temizleme**: Çince/Japonca/Korece karakterler siliniyor
 7. **Fuzzy Match İyileştirmesi**: Tek kelimelik feature adlarına yanlış eşleşme önlendi
 8. **System Prompt v3**: Dil, yaş, not, DATA kuralları güçlendirildi
+
+---
+
+## Metodolojik Düzeltmeler (22 Nisan 2026)
+
+### Yapılan Düzeltmeler
+
+#### 1. Data Leakage Düzeltmesi
+**Sorun:** MinMaxScaler ve MI feature selection tüm veri üzerinde (split öncesi) yapılıyordu.
+**Düzeltme:**
+- `preprocess_dropout.py` ve `prepare_oulad.py`'den scaler ve MI çıkarıldı
+- Preprocessing artık sadece temizlik ve encoding yapıyor
+- `model_dropout_localized.py` ve `model_oulad_v2.py`'de:
+  - Önce train/test split
+  - Scaler sadece train'e fit, test'e transform
+  - MI sadece train üzerinde hesaplanıyor
+
+#### 2. OULAD Target Leakage Düzeltmesi
+**Sorun:** `unregistered` özelliği (kaydını sildirdi mi?) hedef değişkene çok yakındı — Withdrawn sınıfıyla neredeyse aynı bilgiyi taşıyordu.
+**Düzeltme:** `prepare_oulad.py`'den `unregistered` özelliği tamamen çıkarıldı.
+
+**Etki:** OULAD F1 skoru %94.56 → %80.40'a düştü. Bu düşüş, eski skorun ne kadar şişirilmiş olduğunu kanıtlıyor.
+
+#### 3. Class-wise Metrikler Eklendi
+Her iki modele de eklenen yeni metrikler:
+- Classification Report (sınıf bazlı precision/recall/f1)
+- Macro F1 (weighted F1'a ek olarak)
+- Dropout/Withdrawn Recall (en kritik metrik — risk öğrencilerini yakalama oranı)
+
+### Güncel Model Sonuçları
+
+#### Dropout UCI (Yerelleştirilmiş) — Chatbot Modeli
+| Model | F1-Score |
+|---|---|
+| kNN | %68.91 |
+| Naive Bayes | %66.76 |
+| Decision Tree | %71.54 |
+| Random Forest | %73.85 |
+| **XGBoost** | **%75.27** |
+
+Sınıf bazlı (XGBoost):
+| Sınıf | Precision | Recall | F1 |
+|---|---|---|---|
+| Dropout | %80.09 | %72.37 | %76.04 |
+| Enrolled | %51.24 | %42.86 | %46.67 |
+| Graduate | %81.03 | %90.50 | %85.51 |
+
+Dropout Recall: %72.37 — gerçek terk öğrencilerinin %72.4'ünü yakalıyor.
+
+#### OULAD v2 (FE + XGBoost)
+| Model | F1-Score |
+|---|---|
+| kNN | %76.96 |
+| Naive Bayes | %69.05 |
+| Decision Tree | %77.74 |
+| Random Forest | %80.13 |
+| **XGBoost** | **%80.40** |
+
+Sınıf bazlı (XGBoost):
+| Sınıf | Precision | Recall | F1 |
+|---|---|---|---|
+| Withdrawn | %74.87 | %83.13 | %78.79 |
+| Fail | %61.24 | %45.32 | %52.09 |
+| Pass | %92.36 | %96.64 | %94.45 |
+
+Withdrawn Recall: %83.13 — risk öğrencilerinin %83.1'ini yakalıyor.
+
+### Önceki vs Güncel Skorlar
+
+| Model | Eski F1 | Yeni F1 | Fark | Neden |
+|---|---|---|---|---|
+| Dropout Localized | %75.27 | %75.27 | 0 | Scaler leakage etkisi minimal |
+| OULAD v2 | %94.56 | %80.40 | **-14.16** | unregistered target leakage çıkarıldı |

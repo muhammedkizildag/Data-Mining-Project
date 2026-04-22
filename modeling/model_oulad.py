@@ -1,3 +1,7 @@
+# ⚠️ UYARI: Bu dosya v1 baseline modelidir, aktif değildir.
+# Güncel versiyon: model_oulad_v2.py (leakage düzeltilmiş)
+# Sadece geçmiş karşılaştırma için saklanmaktadır.
+
 import pandas as pd
 import numpy as np
 import joblib

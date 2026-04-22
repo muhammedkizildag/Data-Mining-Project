@@ -1,3 +1,8 @@
+# ⚠️ UYARI: Bu dosya artık aktif değildir.
+# Student Habits veri seti OULAD ile değiştirilmiştir.
+# Güncel OULAD modeli: model_oulad_v2.py
+# Sadece geçmiş karşılaştırma için saklanmaktadır.
+
 import pandas as pd
 import numpy as np
 import joblib

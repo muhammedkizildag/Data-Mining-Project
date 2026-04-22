@@ -135,10 +135,10 @@ print("  KAYIT ÖZELLİKLERİ")
 print("=" * 70)
 
 reg = studentRegistration.copy()
-reg['unregistered'] = reg['date_unregistration'].notna().astype(int)
-reg_features = reg[key_cols + ['date_registration', 'unregistered']]
+reg_features = reg[key_cols + ['date_registration']]
 
-print(f"  Kayıt özellikleri: date_registration, unregistered")
+print(f"  Kayıt özellikleri: date_registration")
+print(f"  NOT: 'unregistered' çıkarıldı (hedefe çok yakın özellik — target leakage riski)")
 
 # ============================================================
 # DERS ÖZELLİKLERİ
@@ -192,52 +192,13 @@ for col in cat_cols:
     print(f"    {col}: {le_dict[col]}")
 
 # ============================================================
-# NORMALİZASYON
-# ============================================================
-print("\n" + "=" * 70)
-print("  NORMALİZASYON")
-print("=" * 70)
-
-from sklearn.preprocessing import MinMaxScaler
-
-feature_cols = [c for c in df.columns if c != 'target']
-scaler = MinMaxScaler()
-df[feature_cols] = scaler.fit_transform(df[feature_cols])
-
-print(f"  {len(feature_cols)} özellik MinMaxScaler ile 0-1 aralığına normalize edildi")
-
-# ============================================================
-# FEATURE SELECTION (Mutual Information)
-# ============================================================
-print("\n" + "=" * 70)
-print("  FEATURE SELECTION (Mutual Information)")
-print("=" * 70)
-
-from sklearn.feature_selection import mutual_info_classif
-
-X = df.drop('target', axis=1)
-y = df['target']
-
-mi = mutual_info_classif(X, y, random_state=42)
-mi_df = pd.DataFrame({'Özellik': X.columns, 'MI': mi}).sort_values('MI', ascending=False)
-
-print(f"\n  Mutual Information Skorları:")
-for _, row in mi_df.iterrows():
-    bar = "█" * int(row['MI'] * 50)
-    flag = " ← DÜŞ" if row['MI'] < 0.01 else ""
-    print(f"    {row['Özellik']:30s} MI={row['MI']:.4f} {bar}{flag}")
-
-low_mi = mi_df[mi_df['MI'] < 0.01]['Özellik'].tolist()
-if low_mi:
-    print(f"\n  MI < 0.01 olan {len(low_mi)} özellik çıkarılıyor: {low_mi}")
-    df = df.drop(columns=low_mi)
-
-# ============================================================
-# KAYDET
+# KAYDET (normalizasyon ve MI feature selection modeling aşamasında yapılacak)
 # ============================================================
 print("\n" + "=" * 70)
 print("  SONUÇ")
 print("=" * 70)
+print("  NOT: Normalizasyon ve MI feature selection modeling aşamasında")
+print("       train/test split sonrası yapılacak (data leakage önlemi).")
 
 output_path = "preprocessing/oulad_processed.csv"
 df.to_csv(output_path, index=False)

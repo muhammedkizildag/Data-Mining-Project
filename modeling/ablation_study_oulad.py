@@ -1,3 +1,7 @@
+# ⚠️ UYARI: Bu dosya eski preprocessing çıktısını bekliyordu.
+# Preprocessing güncellendiğinden sonuçları değişebilir.
+# Güncel modelleme: model_oulad_v2.py (leakage düzeltilmiş)
+
 import pandas as pd
 import numpy as np
 import warnings

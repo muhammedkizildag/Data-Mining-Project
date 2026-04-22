@@ -11,8 +11,9 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import (accuracy_score, precision_score, recall_score,
-                             f1_score, confusion_matrix)
+                             f1_score, confusion_matrix, classification_report)
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -94,6 +95,37 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 print(f"  Train: {X_train.shape[0]} satır")
 print(f"  Test:  {X_test.shape[0]} satır")
+
+# ============================================================
+# CHATBOT ÖZELLİK FİLTRESİ (sadece chatbot'un topladığı 22 özellik)
+# ============================================================
+print("\n" + "=" * 70)
+print("  CHATBOT ÖZELLİK FİLTRESİ")
+print("=" * 70)
+
+chatbot_features = list(feature_map.keys())
+extra_in_train = [c for c in X_train.columns if c not in chatbot_features]
+if extra_in_train:
+    print(f"  Chatbot'ta olmayan {len(extra_in_train)} özellik çıkarılıyor:")
+    for col in extra_in_train:
+        print(f"    ✗ {col}")
+    X_train = X_train[chatbot_features]
+    X_test = X_test[chatbot_features]
+
+print(f"  Kalan özellik sayısı: {X_train.shape[1]} (chatbot ile uyumlu)")
+
+# ============================================================
+# NORMALİZASYON (sadece train üzerinde fit — data leakage önlemi)
+# ============================================================
+print("\n" + "=" * 70)
+print("  NORMALİZASYON (train-fit, test-transform)")
+print("=" * 70)
+
+scaler = MinMaxScaler()
+X_train = pd.DataFrame(scaler.fit_transform(X_train), columns=X_train.columns, index=X_train.index)
+X_test = pd.DataFrame(scaler.transform(X_test), columns=X_test.columns, index=X_test.index)
+
+print(f"  Scaler sadece train verisine fit edildi ({X_train.shape[1]} özellik).")
 
 # ============================================================
 # HİPERPARAMETRE OPTİMİZASYONU
@@ -212,6 +244,29 @@ for name, model in optimized_models.items():
     print(f"  F1-Score:  %{f1*100:.2f}")
 
 # ============================================================
+# SINIF BAZLI METRİKLER (Class-wise)
+# ============================================================
+print("\n" + "=" * 70)
+print("  SINIF BAZLI METRİKLER")
+print("=" * 70)
+
+best_temp_name = pd.DataFrame(final_results).loc[pd.DataFrame(final_results)['F1-Score'].idxmax(), 'Model']
+best_temp_model = optimized_models[best_temp_name]
+y_pred_best = best_temp_model.predict(X_test)
+
+print(f"\n  En iyi model: {best_temp_name}")
+print(f"\n  Classification Report:")
+print(classification_report(y_test, y_pred_best, target_names=target_names, digits=4))
+
+f1_macro = f1_score(y_test, y_pred_best, average='macro')
+print(f"  Weighted F1: %{f1_score(y_test, y_pred_best, average='weighted')*100:.2f}")
+print(f"  Macro F1:    %{f1_macro*100:.2f}")
+
+dropout_recall = recall_score(y_test, y_pred_best, average=None)[0]
+print(f"\n  ⚠️  Dropout Recall: %{dropout_recall*100:.2f} (en kritik metrik)")
+print(f"      → Gerçek dropout öğrencilerinin %{dropout_recall*100:.1f}'ini yakalıyoruz")
+
+# ============================================================
 # CONFUSION MATRIX
 # ============================================================
 fig, axes = plt.subplots(2, 3, figsize=(18, 12))
@@ -292,16 +347,28 @@ os.makedirs("models", exist_ok=True)
 joblib.dump(best_model, model_path)
 print(f"  Model: {best_model_name}")
 print(f"  F1-Score: %{best_f1*100:.2f}")
-print(f"  Özellik sayısı: {X.shape[1]} (22)")
+print(f"  Özellik sayısı: {X_train.shape[1]}")
 print(f"  Kaydedildi: {model_path}")
 
-feature_list = list(X.columns)
+feature_list = list(X_train.columns)
 joblib.dump(feature_list, "models/dropout_localized_features.pkl")
 print(f"  Özellik listesi: models/dropout_localized_features.pkl")
 
+import json
+scaler_params = {}
+for i, col in enumerate(X_train.columns):
+    scaler_params[col] = {
+        'min': float(scaler.data_min_[i]),
+        'max': float(scaler.data_max_[i])
+    }
+scaler_path = "models/dropout_localized_scaler_params.json"
+with open(scaler_path, "w", encoding="utf-8") as f:
+    json.dump(scaler_params, f, ensure_ascii=False, indent=2)
+print(f"  Scaler parametreleri (train-fit): {scaler_path}")
+
 if hasattr(best_model, 'feature_importances_'):
     fi = pd.DataFrame({
-        'Özellik': X.columns,
+        'Özellik': X_train.columns,
         'Önem': best_model.feature_importances_
     }).sort_values('Önem', ascending=True)
 

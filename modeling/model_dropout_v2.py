@@ -1,3 +1,8 @@
+# ⚠️ UYARI: Bu dosya artık aktif değildir.
+# Güncel ve metodolojik olarak doğru versiyon: model_dropout_localized.py
+# Bu dosyada data leakage sorunu mevcuttur (scaler split öncesi fit edilmiş).
+# Sadece geçmiş karşılaştırma için saklanmaktadır.
+
 import pandas as pd
 import numpy as np
 import joblib

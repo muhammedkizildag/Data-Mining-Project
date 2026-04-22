@@ -1,3 +1,8 @@
+# ⚠️ UYARI: Bu dosya artık aktif değildir.
+# Scaler split öncesi fit edilmiş (data leakage).
+# Güncel ablation sonuçları: ablation_study_oulad.py
+# Sadece geçmiş karşılaştırma için saklanmaktadır.
+
 import pandas as pd
 import numpy as np
 import warnings
