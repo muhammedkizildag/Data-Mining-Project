@@ -1326,3 +1326,12 @@ Skorlarda değişiklik yok — Pipeline metodolojik düzeltme, performans etkisi
 - `predict_student()` fonksiyonunda default değerler de aynı dönüşümden geçirilir
 - `prepare_chatbot.py` aynı range/question/default değerleriyle güncellendi (yeniden çalıştırıldığında tutarlılık bozulmaz)
 - System prompt'a LLM'in bu değerleri dönüştürmemesi talimatı eklendi
+
+### Not Ortalaması Dönüşümünün Python'a Taşınması
+
+**Sorun:** LLM promptunda "4'lük veya 100'lük notu 20'lik sisteme çevir" talimatı vardı. Ancak LLM'ler matematikte güvenilir değil. Öğrenci "100 üzerinden 85" deyip LLM dönüştürmeyi unutursa, `auto_convert_grade()` sadece ≤4.0 değerleri yakalıyordu — 85 değeri 20'lik ölçekte girilmiş sayılıyor, model anlamsız tahmin üretiyordu.
+
+**Çözüm:**
+- `auto_convert_grade()` genişletildi: ≤4.0 → 4'lük sistem, >20 → 100'lük sistem, 4-20 arası → zaten 20'lik
+- System prompt'tan dönüşüm formülleri kaldırıldı, LLM'e "ham değeri olduğu gibi yaz" talimatı verildi
+- Tüm not dönüşümü artık %100 Python tarafında yapılıyor, LLM'e matematik bırakılmıyor

@@ -145,14 +145,13 @@ GÖREVİN:
 TOPLANMASI GEREKEN BİLGİLER (öncelik sırasıyla):
 {features_text}
 
-NOT SİSTEMİ DÖNÜŞÜMÜ (GİZLİ — öğrenciye gösterme):
-- Türkiye'de üniversiteler genelde 4'lük not sistemi kullanır.
-- Sistem içinde 20'lik ölçek kullanılır. Dönüşüm formülleri:
-  * 4'lük sistem: (not / 4.0) × 20 → Örnek: 2.4 → 12.0
-  * 100'lük sistem: (not / 100) × 20 → Örnek: 70 → 14.0
-- Öğrenci hangi sistemi kullandığını belirtmezse 4'lük varsay.
-- Bu dönüşümü SADECE [DATA] etiketinde yap, öğrenciye "20'lik sisteme çeviriyorum" gibi şeyler SÖYLEME.
-- Öğrenciye sadece "Anladım, notun şuymuş" de, formül gösterme.
+NOT SİSTEMİ:
+- Öğrencinin söylediği notu OLDUĞU GİBİ [DATA] etiketine yaz. Dönüşüm yapma.
+- Öğrenci "4 üzerinden 2.8" derse → 2.8 yaz
+- Öğrenci "100 üzerinden 85" derse → 85 yaz
+- Öğrenci "notum 14" derse → 14 yaz (zaten 20'lik olabilir)
+- Python tarafı notu otomatik tanıyıp dönüştürür, sen sadece ham değeri aktar.
+- Öğrenciye not sistemi veya formül gösterme, sadece "Anladım" de.
 
 YKS PUANI ve LİSE ORTALAMASI:
 - Öğrenci YKS puanını veya lise ortalamasını SÖYLEDİĞİ GİBİ [DATA] etiketine yaz. Dönüşüm yapma.
@@ -188,14 +187,14 @@ SOHBET KURALLARI:
 - Sadece KESİN bilgi topladığında [DATA] ekle. Belirsiz bilgi varsa ekleme.
 - Hiç bilgi toplanmadıysa [DATA] etiketi KOYMA. Boş [DATA: {{}}] veya null değerli [DATA] yasak.
 - Değerler HER ZAMAN sayı olmalı (int veya float). String veya null YASAK.
-- Not dönüşümünü yaptıktan sonraki 20'lik değeri yaz.
+- Notları ve puanları öğrencinin söylediği gibi yaz, dönüşüm yapma. Python otomatik dönüştürür.
 - Özellik adlarını HARF HARF aşağıdaki listeden kopyala. Yazım hatası yapma (örn. "Curicular" YANLIŞ, "Curricular" DOĞRU).
 
 Format:
 [DATA: {{"özellik_adı": sayısal_değer, ...}}]
 
 Örnek: Öğrenci "2. dönem 5 ders aldım 3ünü geçtim notum 4 üzerinden 2.4" derse:
-[DATA: {{"Curricular units 2nd sem (enrolled)": 5, "Curricular units 2nd sem (approved)": 3, "Curricular units 2nd sem (grade)": 12.0}}]
+[DATA: {{"Curricular units 2nd sem (enrolled)": 5, "Curricular units 2nd sem (approved)": 3, "Curricular units 2nd sem (grade)": 2.4}}]
 
 DOĞRU özellik adları listesi (bunları birebir kullan):
 {json.dumps(FEATURE_ORDER, ensure_ascii=False)}
@@ -298,8 +297,12 @@ GRADE_FEATURES = {
 }
 
 def auto_convert_grade(feature_name, value):
-    if feature_name in GRADE_FEATURES and value <= 4.0:
+    if feature_name not in GRADE_FEATURES:
+        return value
+    if value <= 4.0:
         return (value / 4.0) * 20.0
+    if value > 20:
+        return (value / 100) * 20.0
     return value
 
 def auto_convert_turkish_scale(feature_name, value):
