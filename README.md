@@ -163,6 +163,10 @@ python modeling/shap_oulad.py
 
 Bu adımlar ilgili Pipeline modellerini kullanır ve çıktıları sırasıyla `modeling/plots_shap_dropout_localized/` ve `modeling/plots_shap_oulad/` klasörlerine kaydeder.
 
+Güncel modelleme script'leri ayrıca seçilen final model için şu ek grafikleri de üretir:
+- `03_roc_pr_curves.png` — çok sınıflı ROC ve Precision-Recall eğrileri
+- `05_learning_curve.png` — Macro F1 tabanlı learning curve
+
 ### 4. Chatbot hazırlığı
 
 ```bash
@@ -289,6 +293,10 @@ Student Habits, Dropout UCI v1/v2 ve eski ablation çalışmaları proje gelişi
 ### Model Açıklanabilirliği
 
 Dropout Localized modeli için SHAP analizi `modeling/shap_dropout_localized.py` ile, OULAD modeli için ise `modeling/shap_oulad.py` ile üretilir. SHAP sonuçları modelin tahmininde hangi değişkenlerin daha etkili göründüğünü açıklar; bu sonuçlar nedensellik iddiası olarak yorumlanmamalıdır.
+
+### Ek Değerlendirme Grafikleri
+
+Dropout Localized ve OULAD v2 script'leri seçilen final model için çok sınıflı ROC/PR eğrileri ile learning curve grafikleri de üretir. ROC/PR tarafında her sınıf ayrı ayrı ve micro-average olarak raporlanır; learning curve tarafında ise eğitim örnek sayısı arttıkça train/validation Macro F1 davranışı gözlemlenir.
 
 ## Veri Seti Kararları
 

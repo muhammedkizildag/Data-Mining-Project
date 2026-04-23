@@ -1498,6 +1498,35 @@ Bu testler performans benchmark'ı değildir. Ama model dosyası bozulması, fea
 
 ---
 
+## ROC/PR Eğrileri ve Learning Curve (23 Nisan 2026)
+
+### Amaç
+
+Sadece tek bir F1 skoru raporlamak model davranışını tam göstermiyor. Özellikle çok sınıflı yapıda sınıf bazlı ayrım gücünü ve veri arttıkça modelin nasıl davrandığını ayrıca görmek istendi.
+
+### Eklenenler
+
+Her iki güncel modelleme script'ine (`model_dropout_localized.py`, `model_oulad_v2.py`) seçilen final model için iki yeni değerlendirme grafiği eklendi:
+
+1. **ROC/PR eğrileri**
+   - `03_roc_pr_curves.png`
+   - Her sınıf için one-vs-rest ROC ve Precision-Recall eğrileri çizilir
+   - Micro-average eğrisi de ayrıca gösterilir
+
+2. **Learning curve**
+   - `05_learning_curve.png`
+   - Eğitim örnek sayısı arttıkça train ve validation Macro F1 değişimi çizilir
+   - Amaç overfitting / underfitting davranışını kaba düzeyde gözlemlemektir
+
+### Teknik Not
+
+- Learning curve mevcut metodolojiyle uyumlu kalması için seçilen final model üstünden hesaplanır.
+- Seçilen model XGBoost ise fold bazında `sample_weight` korunur; diğer modeller normal `fit()` akışıyla değerlendirilir.
+- ROC/PR eğrileri çok sınıflı problem için one-vs-rest yaklaşımıyla hesaplanır.
+- Bu grafikler model seçimi için değil, final analizi zenginleştirmek için kullanılır.
+
+---
+
 ## Model Seçimi ve XGBoost CV Düzeltmesi (23 Nisan 2025)
 
 ### Problem 1 — Test seti ile model seçimi

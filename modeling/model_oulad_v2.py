@@ -17,12 +17,124 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.feature_selection import mutual_info_classif
 from sklearn.utils.class_weight import compute_sample_weight
 from sklearn.metrics import (accuracy_score, precision_score, recall_score,
-                             f1_score, confusion_matrix, classification_report)
+                             f1_score, confusion_matrix, classification_report,
+                             roc_curve, auc, precision_recall_curve,
+                             average_precision_score)
+from sklearn.preprocessing import label_binarize
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 plt.rcParams['figure.figsize'] = (12, 6)
 sns.set_style("whitegrid")
+
+
+def plot_multiclass_roc_pr(y_true, y_proba, target_names, output_path, title_prefix):
+    classes = np.arange(len(target_names))
+    y_bin = label_binarize(y_true, classes=classes)
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+    for class_idx, class_name in enumerate(target_names):
+        fpr, tpr, _ = roc_curve(y_bin[:, class_idx], y_proba[:, class_idx])
+        roc_auc = auc(fpr, tpr)
+        precision, recall, _ = precision_recall_curve(y_bin[:, class_idx], y_proba[:, class_idx])
+        avg_precision = average_precision_score(y_bin[:, class_idx], y_proba[:, class_idx])
+
+        axes[0].plot(fpr, tpr, linewidth=2, label=f"{class_name} (AUC={roc_auc:.3f})")
+        axes[1].plot(recall, precision, linewidth=2, label=f"{class_name} (AP={avg_precision:.3f})")
+
+    micro_fpr, micro_tpr, _ = roc_curve(y_bin.ravel(), y_proba.ravel())
+    micro_auc = auc(micro_fpr, micro_tpr)
+    axes[0].plot(micro_fpr, micro_tpr, linestyle="--", color="black", linewidth=2,
+                 label=f"Micro-average (AUC={micro_auc:.3f})")
+    axes[0].plot([0, 1], [0, 1], linestyle=":", color="gray")
+    axes[0].set_title(f"ROC Curves — {title_prefix}", fontsize=13, fontweight="bold")
+    axes[0].set_xlabel("False Positive Rate")
+    axes[0].set_ylabel("True Positive Rate")
+    axes[0].legend(fontsize=9)
+
+    micro_precision, micro_recall, _ = precision_recall_curve(y_bin.ravel(), y_proba.ravel())
+    micro_ap = average_precision_score(y_bin, y_proba, average="micro")
+    axes[1].plot(micro_recall, micro_precision, linestyle="--", color="black", linewidth=2,
+                 label=f"Micro-average (AP={micro_ap:.3f})")
+    axes[1].set_title(f"Precision-Recall Curves — {title_prefix}", fontsize=13, fontweight="bold")
+    axes[1].set_xlabel("Recall")
+    axes[1].set_ylabel("Precision")
+    axes[1].legend(fontsize=9)
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
+
+
+def plot_learning_curve_custom(best_pipeline, X_data, y_data, output_path, title, target_names, use_sample_weight=False):
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    train_fracs = np.linspace(0.2, 1.0, 5)
+
+    train_means, train_stds = [], []
+    val_means, val_stds = [], []
+    sample_counts = []
+
+    for frac_idx, frac in enumerate(train_fracs):
+        fold_train_scores = []
+        fold_val_scores = []
+        fold_sizes = []
+
+        for fold_idx, (train_idx, val_idx) in enumerate(cv.split(X_data, y_data)):
+            X_fold_train_full = X_data.iloc[train_idx]
+            y_fold_train_full = y_data.iloc[train_idx]
+            X_fold_val = X_data.iloc[val_idx]
+            y_fold_val = y_data.iloc[val_idx]
+
+            if frac < 1.0:
+                subset_size = max(len(target_names) * 2, int(len(X_fold_train_full) * frac))
+                X_fold_train, _, y_fold_train, _ = train_test_split(
+                    X_fold_train_full,
+                    y_fold_train_full,
+                    train_size=subset_size,
+                    stratify=y_fold_train_full,
+                    random_state=42 + frac_idx + fold_idx,
+                )
+            else:
+                X_fold_train = X_fold_train_full
+                y_fold_train = y_fold_train_full
+
+            fold_sizes.append(len(X_fold_train))
+            pipe_clone = clone(best_pipeline)
+
+            if use_sample_weight:
+                fold_weights = compute_sample_weight('balanced', y_fold_train)
+                pipe_clone.fit(X_fold_train, y_fold_train, model__sample_weight=fold_weights)
+            else:
+                pipe_clone.fit(X_fold_train, y_fold_train)
+
+            y_train_pred = pipe_clone.predict(X_fold_train)
+            y_val_pred = pipe_clone.predict(X_fold_val)
+
+            fold_train_scores.append(f1_score(y_fold_train, y_train_pred, average='macro', zero_division=0))
+            fold_val_scores.append(f1_score(y_fold_val, y_val_pred, average='macro', zero_division=0))
+
+        sample_counts.append(int(np.mean(fold_sizes)))
+        train_means.append(np.mean(fold_train_scores))
+        train_stds.append(np.std(fold_train_scores))
+        val_means.append(np.mean(fold_val_scores))
+        val_stds.append(np.std(fold_val_scores))
+
+    fig, ax = plt.subplots(figsize=(9, 6))
+    ax.plot(sample_counts, train_means, marker='o', linewidth=2, label='Train Macro F1', color='tab:blue')
+    ax.plot(sample_counts, val_means, marker='o', linewidth=2, label='Validation Macro F1', color='tab:orange')
+    ax.fill_between(sample_counts, np.array(train_means) - np.array(train_stds),
+                    np.array(train_means) + np.array(train_stds), alpha=0.15, color='tab:blue')
+    ax.fill_between(sample_counts, np.array(val_means) - np.array(val_stds),
+                    np.array(val_means) + np.array(val_stds), alpha=0.15, color='tab:orange')
+    ax.set_title(title, fontsize=13, fontweight='bold')
+    ax.set_xlabel('Eğitim Örnek Sayısı')
+    ax.set_ylabel('Macro F1')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
 
 output_dir = "modeling/plots_oulad_v2"
 os.makedirs(output_dir, exist_ok=True)
@@ -272,6 +384,28 @@ print(classification_report(y_test, y_pred_best, target_names=target_names, digi
 withdrawn_recall = recall_score(y_test, y_pred_best, average=None)[0]
 print(f"\n  ⚠️  Withdrawn Recall: %{withdrawn_recall*100:.2f}")
 print(f"      → Gerçek bırakma öğrencilerinin %{withdrawn_recall*100:.1f}'ini yakalıyoruz")
+
+best_proba = best_pipeline.predict_proba(X_test)
+plot_multiclass_roc_pr(
+    y_test,
+    best_proba,
+    target_names,
+    f"{output_dir}/03_roc_pr_curves.png",
+    f"{best_model_name} (OULAD v2)"
+)
+print(f"\n  ROC/PR grafiği kaydedildi: {output_dir}/03_roc_pr_curves.png")
+
+use_weighted_fit = best_model_name == "XGBoost"
+plot_learning_curve_custom(
+    best_pipeline,
+    X_train,
+    y_train,
+    f"{output_dir}/05_learning_curve.png",
+    f"Learning Curve — {best_model_name} (OULAD v2)",
+    target_names,
+    use_sample_weight=use_weighted_fit,
+)
+print(f"  Learning curve kaydedildi: {output_dir}/05_learning_curve.png")
 
 # ============================================================
 # CONFUSION MATRIX (sadece seçilen model)
