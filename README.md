@@ -174,6 +174,20 @@ Bu adım chatbotun ihtiyaç duyduğu şu dosyaları üretir/günceller:
 - `chatbot/feature_config.json`
 - `chatbot/reference_stats.json`
 
+### 5. Smoke testleri
+
+Temel artifact ve şema kontrollerini çalıştırmak için:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Bu testler şunları doğrular:
+- kaydedilmiş Dropout Localized modelinin yüklenip örnek tahmin üretebildiğini,
+- chatbot feature sırasının model feature listesiyle eşleştiğini,
+- kaydedilmiş OULAD modelinin örnek tahmin üretebildiğini,
+- işlenmiş veri dosyalarında beklenen target/feature şemasının bulunduğunu.
+
 ## Chatbot
 
 Chatbot Streamlit ile çalışır ve Groq API üzerinden `llama-3.3-70b-versatile` modelini kullanır. LLM sohbetten yapılandırılmış öğrenci verisi çıkarır, bu veri `models/best_model_dropout_localized.pkl` dosyasındaki Pipeline'a (MinMaxScaler + XGBoost) ham olarak gönderilir. Normalizasyon Pipeline içinde otomatik yapılır.
