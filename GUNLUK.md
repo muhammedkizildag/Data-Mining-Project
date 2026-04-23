@@ -1359,9 +1359,144 @@ Model yalnızca olasılık üretmekle kalmasın, hangi değişkenlerin tahmini d
 - Chatbot içine canlı SHAP hesabı eklenmedi; performans ve bağımlılık riskini azaltmak için ayrı analiz script'i yazıldı.
 - `modeling/shap_dropout_localized.py` dosyası eklendi.
 - Script, `models/best_model_dropout_localized.pkl` içindeki Pipeline'ı yükler.
-- Test setini aynı feature sırasıyla hazırlar, Pipeline içindeki scaler ile dönüştürür ve XGBoost'un `pred_contribs=True` mekanizmasıyla SHAP katkı değerlerini hesaplar.
+- Test setini aynı feature sırasıyla hazırlar ve Pipeline içindeki scaler ile dönüştürür.
+- Eğer en iyi model XGBoost ise `pred_contribs=True`, ağaç tabanlı sklearn modeli ise `shap.TreeExplainer` kullanarak SHAP katkı değerlerini hesaplar.
 - Global ve sınıf bazlı SHAP önem tabloları/grafikleri `modeling/plots_shap_dropout_localized/` altına kaydedilir.
 
 ### Not
 
 SHAP çıktıları nedensellik iddiası değildir. Yalnızca modelin mevcut tahmin mekanizmasında hangi özelliklerin daha etkili göründüğünü açıklar.
+
+---
+
+## Chatbot Tahmin Öncesi Kontrol Akışı (23 Nisan 2026)
+
+### Sorun
+
+Chatbot yeterli bilgiyi topladığı anda tahmini otomatik üretiyordu. Kullanıcının hangi verilerin modele girdiğini görme, eksik kalan önemli alanları fark etme veya yanlış toplanmış bir bilgiyi tahmin öncesinde düzeltme şansı yoktu.
+
+### Çözüm
+
+- `chatbot/app.py` içinde tahmin öncesi onay adımı eklendi.
+- `ANALIZ_HAZIR` geldikten sonra model artık doğrudan çalıştırılmıyor.
+- Önce "Tahmin Öncesi Kontrol" bölümü gösteriliyor.
+- Bu bölümde:
+  - toplanan veriler kullanıcı dostu Türkçe adlarla listeleniyor,
+  - eksik kalan `essential` ve `high` öncelikli alanlar ayrı gösteriliyor.
+- Kullanıcı iki aksiyon arasından seçim yapabiliyor:
+  - `Tahmini Oluştur`
+  - `Bilgileri Düzelt`
+- `Tahmini Oluştur` seçilirse mevcut pipeline ile analiz üretiliyor.
+- `Bilgileri Düzelt` seçilirse tahmin bekletiliyor ve kullanıcı ek/düzeltme bilgisi girmeye devam edebiliyor.
+
+### Teknik Not
+
+- Bu geliştirme yalnızca chatbot katmanında yapıldı; model eğitimi, preprocessing veya kayıtlı model dosyaları değiştirilmedi.
+- `pending_prediction` adında yeni bir session state alanı eklendi.
+- Mevcut tahmin üretim metni ayrı bir yardımcı fonksiyona taşınarak akış daha okunur hale getirildi.
+
+---
+
+## OULAD için SHAP Analizi (23 Nisan 2026)
+
+### Amaç
+
+Dropout Localized modeli için eklenen açıklanabilirlik yaklaşımının OULAD tarafında da bulunması istendi. Böylece yalnızca bir veri seti için değil, iki güncel model için de hangi özelliklerin tahmini daha çok etkilediği görselleştirilebilecek.
+
+### Uygulama
+
+- `modeling/shap_oulad.py` dosyası eklendi.
+- Script, `models/best_model_oulad.pkl` Pipeline modelini yükler.
+- `model_oulad_v2.py` içindeki feature engineering adımları aynı şekilde yeniden uygulanır.
+- Train/test split aynı parametrelerle kurulur (`test_size=0.30`, `random_state=42`, `stratify=y`).
+- OULAD v2 ile uyumlu olması için Mutual Information filtresi yine yalnızca train tarafında hesaplanır ve `MI < 0.01` olan özellikler çıkarılır.
+- Ardından Pipeline içindeki scaler ile test verisi dönüştürülür ve XGBoost'un `pred_contribs=True` mekanizmasıyla SHAP katkı değerleri hesaplanır.
+- Global ve sınıf bazlı SHAP tablo/grafikleri `modeling/plots_shap_oulad/` altına kaydedilir.
+
+### Not
+
+Bu script ayrı bir analiz katmanıdır; model eğitimi akışını değiştirmez. SHAP çıktıları OULAD modelinin karar mantığını yorumlamaya yardımcı olur, ancak nedensellik iddiası taşımaz.
+
+---
+
+## Sınıf Dengesizliği Düzeltmesi — f1_macro + class_weight (23 Nisan 2026)
+
+### Problem
+
+Her iki modelde de GridSearchCV `scoring='f1_weighted'` ile optimize ediliyordu. Weighted F1, büyük sınıfları (Graduate, Pass) daha fazla ödüllendirdiği için küçük sınıflar (Enrolled %18, Fail %22) ihmal ediliyordu. Enrolled sınıfı F1 %46.54 ve recall %42.44 ile çok düşüktü.
+
+### Uygulanan Değişiklikler
+
+Her iki modelleme dosyasında (`model_dropout_localized.py`, `model_oulad_v2.py`):
+
+1. **GridSearchCV scoring:** `'f1_weighted'` → `'f1_macro'` — her sınıfa eşit ağırlık
+2. **Decision Tree & Random Forest:** `class_weight='balanced'` eklendi — sınıf frekansına ters orantılı ağırlık
+3. **XGBoost:** `compute_sample_weight('balanced', y_train)` ile örnek ağırlıkları hesaplanıp `model__sample_weight` olarak GridSearchCV'ye geçildi
+4. **Raporlama:** Hem `F1-Weighted` hem `F1-Macro` birlikte raporlanır. En iyi model seçimi `F1-Macro`'ya göre yapılır
+5. **10-fold CV:** Her iki metrik de paralel raporlanır
+
+### Dropout Localized Sonuçları
+
+| Metrik | Önceki | Güncel | Fark |
+|--------|--------|--------|------|
+| Weighted F1 | %75.10 | %74.33 | -0.77 |
+| Macro F1 | %69.06 | %69.06 | +0.00 |
+| Enrolled F1 | %46.54 | %50.09 | +3.55 |
+| Enrolled Recall | %42.44 | %57.98 | +15.54 |
+| Dropout Recall | %72.60 | %65.81 | -6.79 |
+
+En iyi model: Random Forest (CV Macro F1: %69.04). Enrolled recall'u %42 → %58'e çıktı. Weighted F1'de küçük kayıp var ama sınıflar arası denge iyileşti. Test seti artık model seçimi için değil, yalnızca final raporlama için kullanılıyor.
+
+### OULAD v2 Sonuçları
+
+| Metrik | Önceki | Güncel | Fark |
+|--------|--------|--------|------|
+| Weighted F1 | %80.48 | %80.44 | -0.04 |
+| Macro F1 | — | %75.76 | (yeni metrik) |
+| Fail F1 | %52.28 | %56.87 | +4.59 |
+| Fail Recall | %45.84 | %58.65 | +12.81 |
+| Withdrawn Recall | %82.87 | %74.89 | -7.98 |
+
+En iyi model: XGBoost (CV Macro F1: %76.33). Fail recall'u %46 → %59'a çıktı. Weighted F1 neredeyse aynı kaldı (sadece 0.04 puan kayıp). Test seti yalnızca final değerlendirme için tutuldu.
+
+### Metodolojik Not
+
+- `f1_macro`, her sınıfa eşit önem verir. Bu, azınlık sınıflarının (Enrolled, Fail) ihmal edilmesini önler.
+- `class_weight='balanced'`, sınıf frekansına göre `n_samples / (n_classes * n_samples_per_class)` ağırlığı otomatik hesaplar.
+- XGBoost'ta native class_weight parametresi olmadığı için `compute_sample_weight` ile örnek bazlı ağırlıklar hesaplanıp GridSearchCV'ye geçildi.
+- Model seçimi 10-fold CV Macro F1 skoruna göre yapılır; test seti tek seferlik final raporlama için ayrılır.
+- Weighted F1'deki küçük düşüş beklenen bir trade-off: büyük sınıflardan biraz feda edilerek küçük sınıflar iyileştirildi. Eğitimsel açıdan doğru olan, her üç sınıfın dengeli tahmin edilmesidir.
+
+---
+
+## Model Seçimi ve XGBoost CV Düzeltmesi (23 Nisan 2025)
+
+### Problem 1 — Test seti ile model seçimi
+
+Daha önce en iyi model test set F1-Macro skoruna göre seçilip aynı test set skoru "final sonuç" olarak raporlanıyordu. Bu metodolojik olarak yanlış: test seti model seçim sürecine girerse raporlanan performans iyimser olur. Doğru yaklaşım: modeli CV skoru ile seçmek, test setini sadece seçilen modelin final değerlendirmesi için bir kez kullanmak.
+
+### Problem 2 — XGBoost 10-fold CV'de sample_weight eksikliği
+
+GridSearchCV'de XGBoost'a `model__sample_weight` geçiriliyordu ama 10-fold `cross_val_score` çağrılarında geçirilmiyordu. DT/RF'nin `class_weight='balanced'` parametresi model objesinin içinde olduğu için otomatik uygulanır, ama XGBoost'un sample_weight'i harici olduğundan elle geçirilmesi gerekir.
+
+### Uygulanan Değişiklikler
+
+Her iki modelleme dosyasında:
+
+1. **Model seçimi:** Test set skorları yerine 10-fold CV Macro F1 ortalamasından en iyi model seçilir
+2. **XGBoost 10-fold CV:** `cross_val_score` yerine manuel fold döngüsü yazıldı — her fold'da `compute_sample_weight('balanced', y_fold_train)` hesaplanıp `model__sample_weight` olarak geçilir
+3. **Test seti:** Sadece CV ile seçilen model için bir kez kullanılır, tüm modeller için ayrı ayrı değil
+4. **Confusion matrix:** 5 modelin 2x3 grid'i yerine sadece seçilen modelin tek confusion matrix'i kaydedilir
+5. **CV karşılaştırma tablosu:** Tüm modellerin CV skorları raporlanır (test skorları değil)
+
+### Sonuçlar
+
+**Dropout Localized:** CV ile Random Forest seçildi (CV Macro %69.04 vs XGBoost %68.88). XGBoost'un sample_weight ile 10-fold CV skoru GridSearchCV'deki skordan farklı çıktı çünkü artık her fold'da kendi ağırlıkları hesaplanıyor. Test Macro F1 %69.06 — CV skoru ile çok tutarlı.
+
+**OULAD v2:** CV ile yine XGBoost seçildi (CV Macro %76.33). Test Macro F1 %75.76 — yine CV ile tutarlı.
+
+### Metodolojik Not
+
+- CV skoru ile test skoru arasındaki küçük farklar beklenen varyans. Yakın olmaları modelin generalize ettiğini gösterir.
+- Dropout modelinde Random Forest'ın seçilmesi, sample_weight düzeltmesinin etkisi: XGBoost artık her fold'da tutarlı ağırlıklarla eğitilince CV skoru biraz düştü ve RF öne geçti.
+- Bu düzeltmeyle raporlanan skorlar artık metodolojik olarak temiz: test seti hiçbir karar sürecine karışmıyor.

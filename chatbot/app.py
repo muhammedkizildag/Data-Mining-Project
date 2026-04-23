@@ -105,6 +105,22 @@ def predict_student(collected_data):
     probabilities = pipeline.predict_proba(X)[0]
     return prediction, probabilities, fallback_used
 
+def get_display_name(feature_name):
+    return feature_config.get(feature_name, {}).get("tr", feature_name)
+
+def format_feature_value(feature_name, value):
+    if float(value).is_integer():
+        return str(int(value))
+    return f"{value:.2f}"
+
+def get_missing_priority_features(collected_data):
+    missing = []
+    for feat in FEATURE_ORDER:
+        cfg = feature_config.get(feat, {})
+        if cfg.get("priority") in ("essential", "high") and feat not in collected_data:
+            missing.append(feat)
+    return missing
+
 def get_feature_comparison(collected_data):
     comparisons = []
     grad_stats = reference_stats['Graduate']
@@ -370,6 +386,52 @@ def clean_non_turkish(text):
 def check_analysis_ready(response_text):
     return "ANALIZ_HAZIR" in response_text
 
+def build_prediction_response():
+    prediction, probabilities, fallback_used = predict_student(st.session_state.collected_data)
+    comparisons = get_feature_comparison(st.session_state.collected_data)
+    pred_name = TARGET_NAMES[prediction]
+
+    result_text = f"\n\n---\n### 📊 Analiz Sonucu\n\n"
+
+    if fallback_used:
+        result_text += "_Not: 2. dönem bilgilerinin bir kısmı eksik olduğu için bu alanlarda 1. dönem performansının benzer devam ettiği varsayıldı._\n\n"
+
+    result_text += "**Olasılık Dağılımı:**\n"
+    for i in TARGET_NAMES:
+        prob = probabilities[i] * 100
+        bar = "█" * int(prob / 2)
+        result_text += f"- {'🔴' if i==0 else '🟡' if i==1 else '🟢'} {TARGET_NAMES[i]}: %{prob:.1f} {bar}\n"
+
+    if comparisons:
+        result_text += "\n**Senin Durumun vs Başarılı Öğrenciler:**\n"
+        for comp in comparisons:
+            direction = "✅" if comp['value'] >= comp['graduate_avg'] else "⚠️"
+            result_text += f"- {direction} {comp['feature']}: Sen: {comp['value']}, Mezun ort: {comp['graduate_avg']}, Terk ort: {comp['dropout_avg']}\n"
+
+    analysis_messages = [
+        {"role": "system", "content": f"""Aşağıdaki analiz sonuçlarını öğrenciye YAPICI ve DESTEKLEYİCİ bir dille aktar.
+SADECE Türkçe konuş, tek bir İngilizce veya yabancı dilde kelime kullanma.
+Kesinlikle "kalırsın" veya "başarısız olursun" gibi ifadeler kullanma.
+Somut ve uygulanabilir öneriler ver.
+"Eğer şunu yaparsan, durumun iyileşir" gibi yapıcı senaryolar sun.
+Kısa ve öz tut, 4-5 cümleyi geçme.
+
+TAHMİN SONUCU: {pred_name}
+OLASILIKLAR: Terk: %{probabilities[0]*100:.1f}, Devam: %{probabilities[1]*100:.1f}, Mezuniyet: %{probabilities[2]*100:.1f}
+
+KARŞILAŞTIRMALAR:
+{json.dumps(comparisons, ensure_ascii=False, indent=2)}
+
+TOPLANAN VERİLER:
+{json.dumps(st.session_state.collected_data, ensure_ascii=False, indent=2)}"""},
+        {"role": "user", "content": "Bu sonuçları bana anlat ve öneriler ver."}
+    ]
+
+    analysis_text = chat_with_llm(analysis_messages)
+    _, clean_analysis = extract_data_from_response(analysis_text)
+    clean_analysis = clean_non_turkish(clean_analysis)
+    return clean_analysis + result_text
+
 def chat_with_llm(messages):
     response = groq_client.chat.completions.create(
         model=LLM_MODEL,
@@ -390,6 +452,8 @@ if "prediction_done" not in st.session_state:
     st.session_state.prediction_done = False
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
+if "pending_prediction" not in st.session_state:
+    st.session_state.pending_prediction = False
 
 # ============================================================
 # SIDEBAR
@@ -405,6 +469,7 @@ with st.sidebar:
         st.session_state.collected_data = {}
         st.session_state.prediction_done = False
         st.session_state.chat_history = []
+        st.session_state.pending_prediction = False
         st.rerun()
 
 # ============================================================
@@ -415,6 +480,50 @@ st.title("🎓 Akademik Danışman Asistanı")
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
+
+if st.session_state.pending_prediction and not st.session_state.prediction_done:
+    collected_items = list(st.session_state.collected_data.items())
+    missing_features = get_missing_priority_features(st.session_state.collected_data)
+
+    st.divider()
+    st.subheader("Tahmin Öncesi Kontrol")
+    st.caption("Aşağıdaki özet, model çalıştırılmadan önce toplanan bilgilerdir.")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("**Toplanan Bilgiler**")
+        if collected_items:
+            for feat, value in collected_items:
+                st.markdown(f"- **{get_display_name(feat)}:** {format_feature_value(feat, value)}")
+        else:
+            st.markdown("- Henüz veri toplanmadı.")
+
+    with col2:
+        st.markdown("**Hala Eksik Olan Öncelikli Bilgiler**")
+        if missing_features:
+            for feat in missing_features:
+                st.markdown(f"- {get_display_name(feat)}")
+        else:
+            st.markdown("- Öncelikli alanlar tamamlandı.")
+
+    action_col1, action_col2 = st.columns(2)
+    with action_col1:
+        if st.button("Tahmini Oluştur", type="primary", use_container_width=True):
+            with st.spinner("Analiz hazırlanıyor..."):
+                final_response = build_prediction_response()
+            st.session_state.prediction_done = True
+            st.session_state.pending_prediction = False
+            st.session_state.messages.append({"role": "assistant", "content": final_response})
+            st.session_state.chat_history.append({"role": "assistant", "content": final_response})
+            st.rerun()
+    with action_col2:
+        if st.button("Bilgileri Düzelt", use_container_width=True):
+            follow_up = "Tamam, tahmini bekletiyorum. Düzeltmek veya eklemek istediğin bilgileri yazabilirsin."
+            st.session_state.pending_prediction = False
+            st.session_state.messages.append({"role": "assistant", "content": follow_up})
+            st.session_state.chat_history.append({"role": "assistant", "content": follow_up})
+            st.rerun()
 
 # ============================================================
 # İLK MESAJ
@@ -471,58 +580,18 @@ if prompt := st.chat_input("Mesajını yaz..."):
                         st.session_state.collected_data.update(extracted_data)
 
                     if check_analysis_ready(response_text) and not st.session_state.prediction_done:
-                        st.session_state.prediction_done = True
-                        prediction, probabilities, fallback_used = predict_student(st.session_state.collected_data)
-
-                        comparisons = get_feature_comparison(st.session_state.collected_data)
-
-                        pred_name = TARGET_NAMES[prediction]
-
-                        result_text = f"\n\n---\n### 📊 Analiz Sonucu\n\n"
-
-                        if fallback_used:
-                            result_text += "_Not: 2. dönem bilgilerinin bir kısmı eksik olduğu için bu alanlarda 1. dönem performansının benzer devam ettiği varsayıldı._\n\n"
-
-                        result_text += "**Olasılık Dağılımı:**\n"
-                        for i in TARGET_NAMES:
-                            prob = probabilities[i] * 100
-                            bar = "█" * int(prob / 2)
-                            result_text += f"- {'🔴' if i==0 else '🟡' if i==1 else '🟢'} {TARGET_NAMES[i]}: %{prob:.1f} {bar}\n"
-
-                        if comparisons:
-                            result_text += "\n**Senin Durumun vs Başarılı Öğrenciler:**\n"
-                            for comp in comparisons:
-                                direction = "✅" if comp['value'] >= comp['graduate_avg'] else "⚠️"
-                                result_text += f"- {direction} {comp['feature']}: Sen: {comp['value']}, Mezun ort: {comp['graduate_avg']}, Terk ort: {comp['dropout_avg']}\n"
-
-                        analysis_messages = [
-                            {"role": "system", "content": f"""Aşağıdaki analiz sonuçlarını öğrenciye YAPICI ve DESTEKLEYİCİ bir dille aktar.
-SADECE Türkçe konuş, tek bir İngilizce veya yabancı dilde kelime kullanma.
-Kesinlikle "kalırsın" veya "başarısız olursun" gibi ifadeler kullanma.
-Somut ve uygulanabilir öneriler ver.
-"Eğer şunu yaparsan, durumun iyileşir" gibi yapıcı senaryolar sun.
-Kısa ve öz tut, 4-5 cümleyi geçme.
-
-TAHMİN SONUCU: {pred_name}
-OLASILIKLAR: Terk: %{probabilities[0]*100:.1f}, Devam: %{probabilities[1]*100:.1f}, Mezuniyet: %{probabilities[2]*100:.1f}
-
-KARŞILAŞTIRMALAR:
-{json.dumps(comparisons, ensure_ascii=False, indent=2)}
-
-TOPLANAN VERİLER:
-{json.dumps(st.session_state.collected_data, ensure_ascii=False, indent=2)}"""},
-                            {"role": "user", "content": "Bu sonuçları bana anlat ve öneriler ver."}
-                        ]
-
-                        analysis_text = chat_with_llm(analysis_messages)
-                        _, clean_analysis = extract_data_from_response(analysis_text)
-
-                        clean_analysis = clean_non_turkish(clean_analysis)
-                        final_response = clean_analysis + result_text
-                        st.markdown(final_response)
-                        st.session_state.messages.append({"role": "assistant", "content": final_response})
+                        clean_response = clean_response.replace("ANALIZ_HAZIR", "").strip()
+                        clean_response = clean_non_turkish(clean_response)
+                        review_message = clean_response
+                        if review_message:
+                            review_message += "\n\nAşağıda topladığım bilgileri kontrol et. Uygunsa tahmini oluşturabilirim."
+                        else:
+                            review_message = "Tahmin için yeterli bilgiyi topladım. Aşağıda topladığım verileri kontrol et; uygunsa tahmini oluşturabilirim."
+                        st.session_state.pending_prediction = True
+                        st.markdown(review_message)
+                        st.session_state.messages.append({"role": "assistant", "content": review_message})
                         st.session_state.chat_history.append({"role": "user", "content": prompt})
-                        st.session_state.chat_history.append({"role": "assistant", "content": final_response})
+                        st.session_state.chat_history.append({"role": "assistant", "content": review_message})
 
                     else:
                         clean_response = clean_response.replace("ANALIZ_HAZIR", "").strip()

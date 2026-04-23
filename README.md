@@ -49,6 +49,7 @@ Data-Mining-Project/
 │   ├── model_habits.py                # Legacy
 │   ├── model_habits_v2.py             # Legacy, aktif değil
 │   ├── model_oulad.py                 # Legacy baseline
+│   ├── shap_oulad.py                  # OULAD için SHAP analizi
 │   ├── shap_dropout_localized.py       # SHAP açıklanabilirlik analizi
 │   ├── ablation_study.py              # Legacy
 │   ├── ablation_study_oulad.py        # Legacy
@@ -157,9 +158,10 @@ SHAP açıklanabilirlik grafikleri için:
 
 ```bash
 python modeling/shap_dropout_localized.py
+python modeling/shap_oulad.py
 ```
 
-Bu adım `models/best_model_dropout_localized.pkl` Pipeline modelini kullanır ve çıktıları `modeling/plots_shap_dropout_localized/` klasörüne kaydeder.
+Bu adımlar ilgili Pipeline modellerini kullanır ve çıktıları sırasıyla `modeling/plots_shap_dropout_localized/` ve `modeling/plots_shap_oulad/` klasörlerine kaydeder.
 
 ### 4. Chatbot hazırlığı
 
@@ -210,49 +212,61 @@ Chatbotta kullanılan modeldir. Türkiye bağlamında doğrudan karşılığı z
 - `Debtor`
 - `Inflation rate`
 
-| Model | F1 |
-|---|---:|
-| kNN | %67.27 |
-| Naive Bayes | %66.76 |
-| Decision Tree | %70.57 |
-| Random Forest | %73.44 |
-| XGBoost | %75.10 |
+Optimizasyon `f1_macro` ile yapılır (her sınıfa eşit ağırlık). Decision Tree ve Random Forest `class_weight='balanced'`, XGBoost `sample_weight` kullanır. Model seçimi 10-fold CV Macro F1 skoruna göre yapılır, test seti sadece final raporlama için bir kez kullanılır.
 
-XGBoost sınıf bazlı sonuçları:
+10-Fold CV sonuçları:
+
+| Model | CV Macro F1 | CV Weighted F1 |
+|---|---:|---:|
+| kNN | %61.13 | %68.15 |
+| Naive Bayes | %60.04 | %67.03 |
+| Decision Tree | %63.83 | %68.72 |
+| Random Forest | %69.04 | %74.47 |
+| XGBoost | %68.88 | %73.96 |
+
+Seçilen model: **Random Forest** (CV Macro F1: %69.04). Test seti sınıf bazlı sonuçları:
 
 | Sınıf | Precision | Recall | F1 |
 |---|---:|---:|---:|
-| Dropout | %78.88 | %72.60 | %75.61 |
-| Enrolled | %51.53 | %42.44 | %46.54 |
-| Graduate | %80.65 | %89.89 | %85.02 |
+| Dropout | %83.38 | %65.81 | %73.56 |
+| Enrolled | %44.09 | %57.98 | %50.09 |
+| Graduate | %82.60 | %84.46 | %83.52 |
+
+Test Macro F1: %69.06, Test Weighted F1: %74.33
 
 Kaydedilen model ve yardımcı dosyalar:
 
 ```text
-models/best_model_dropout_localized.pkl    # Pipeline: MinMaxScaler + XGBoost
+models/best_model_dropout_localized.pkl    # Pipeline: MinMaxScaler + Random Forest
 models/dropout_localized_features.pkl      # Özellik listesi
 models/dropout_localized_scaler_params.json # Scaler parametreleri (dokümantasyon)
 ```
 
 ### OULAD v2
 
-| Model | F1 |
-|---|---:|
-| kNN | %77.18 |
-| Naive Bayes | %69.05 |
-| Decision Tree | %77.55 |
-| Random Forest | %80.03 |
-| XGBoost | %80.48 |
+Aynı şekilde `f1_macro` optimizasyonu, `class_weight='balanced'` / `sample_weight` ve CV tabanlı model seçimi kullanılır.
 
-XGBoost sınıf bazlı sonuçları:
+10-Fold CV sonuçları:
+
+| Model | CV Macro F1 | CV Weighted F1 |
+|---|---:|---:|
+| kNN | %72.03 | %77.98 |
+| Naive Bayes | %61.74 | %69.51 |
+| Decision Tree | %72.82 | %77.75 |
+| Random Forest | %75.15 | %79.98 |
+| XGBoost | %76.33 | %80.99 |
+
+Seçilen model: **XGBoost** (CV Macro F1: %76.33). Test seti sınıf bazlı sonuçları:
 
 | Sınıf | Precision | Recall | F1 |
 |---|---:|---:|---:|
-| Withdrawn | %75.26 | %82.87 | %78.88 |
-| Fail | %60.82 | %45.84 | %52.28 |
-| Pass | %92.38 | %96.64 | %94.46 |
+| Withdrawn | %78.64 | %74.89 | %76.72 |
+| Fail | %55.20 | %58.65 | %56.87 |
+| Pass | %93.56 | %93.82 | %93.69 |
 
-OULAD modelinde eski `%94` civarı skorların ana nedeni `unregistered` özelliğinin hedef değişkene çok yakın bilgi taşımasıydı. Bu özellik çıkarıldıktan sonra temiz OULAD v2 XGBoost F1 skoru `%80.48` olarak raporlanır.
+Test Macro F1: %75.76, Test Weighted F1: %80.44
+
+OULAD modelinde eski `%94` civarı skorların ana nedeni `unregistered` özelliğinin hedef değişkene çok yakın bilgi taşımasıydı. Bu özellik çıkarıldıktan sonra temiz OULAD v2 XGBoost Weighted F1 skoru `%80.44`, Macro F1 `%75.76` olarak raporlanır.
 
 ### Legacy Sonuçlar
 
@@ -260,7 +274,7 @@ Student Habits, Dropout UCI v1/v2 ve eski ablation çalışmaları proje gelişi
 
 ### Model Açıklanabilirliği
 
-Dropout Localized modeli için SHAP analizi `modeling/shap_dropout_localized.py` ile üretilir. SHAP sonuçları modelin tahmininde hangi değişkenlerin daha etkili göründüğünü açıklar; bu sonuçlar nedensellik iddiası olarak yorumlanmamalıdır.
+Dropout Localized modeli için SHAP analizi `modeling/shap_dropout_localized.py` ile, OULAD modeli için ise `modeling/shap_oulad.py` ile üretilir. SHAP sonuçları modelin tahmininde hangi değişkenlerin daha etkili göründüğünü açıklar; bu sonuçlar nedensellik iddiası olarak yorumlanmamalıdır.
 
 ## Veri Seti Kararları
 

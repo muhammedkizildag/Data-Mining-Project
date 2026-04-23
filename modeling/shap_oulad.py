@@ -8,19 +8,18 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import shap
 import xgboost as xgb
+from sklearn.feature_selection import mutual_info_classif
 from sklearn.model_selection import train_test_split
 
 warnings.filterwarnings("ignore")
 
 
-OUTPUT_DIR = "modeling/plots_shap_dropout_localized"
-MODEL_PATH = "models/best_model_dropout_localized.pkl"
-FEATURES_PATH = "models/dropout_localized_features.pkl"
-DATA_PATH = "preprocessing/dropout_processed.csv"
+OUTPUT_DIR = "modeling/plots_shap_oulad"
+MODEL_PATH = "models/best_model_oulad.pkl"
+DATA_PATH = "preprocessing/oulad_processed.csv"
 
-TARGET_NAMES = ["Dropout", "Enrolled", "Graduate"]
+TARGET_NAMES = ["Withdrawn", "Fail", "Pass"]
 
 
 def normalize_xgboost_contribs(values, n_features):
@@ -44,41 +43,50 @@ def normalize_xgboost_contribs(values, n_features):
     raise ValueError(f"Unsupported XGBoost contribution shape: {arr.shape}")
 
 
-def normalize_tree_shap_values(values, n_features):
-    """Return SHAP values as (samples, features, classes)."""
-    if isinstance(values, list):
-        arr = np.stack([np.asarray(class_values) for class_values in values], axis=-1)
-    else:
-        arr = np.asarray(values)
-
-    if arr.ndim == 2:
-        return arr[:, :, np.newaxis]
-    if arr.ndim == 3:
-        if arr.shape[1] == n_features:
-            return arr
-        if arr.shape[2] == n_features:
-            return np.transpose(arr, (0, 2, 1))
-
-    raise ValueError(f"Unsupported Tree SHAP shape: {arr.shape}")
+def add_engineered_features(frame):
+    X = frame.copy()
+    X["score_per_assessment"] = X["avg_score"] * X["num_assessments"]
+    X["click_per_day"] = X["total_clicks"] / (X["total_vle_days"] + 0.001)
+    X["assessment_completion_rate"] = X["num_assessments"] / (
+        X["num_TMA"] + X["num_CMA"] + X["num_Exam"] + 0.001
+    )
+    X["forum_ratio"] = X["clicks_forumng"] / (X["total_clicks"] + 0.001)
+    X["quiz_ratio"] = X["clicks_quiz"] / (X["total_clicks"] + 0.001)
+    X["resource_ratio"] = X["clicks_resource"] / (X["total_clicks"] + 0.001)
+    X["score_consistency"] = X["avg_score"] / (X["std_score"] + 0.001)
+    X["early_late_ratio"] = X["early_submissions"] / (X["late_submissions"] + 0.001)
+    X["tma_cma_score_diff"] = X["avg_score_TMA"] - X["avg_score_CMA"]
+    X["engagement_score"] = (
+        X["total_clicks"] * X["total_vle_days"] * X["num_distinct_activities"]
+    )
+    return X
 
 
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     print("=" * 70)
-    print("  SHAP ANALIZI - Dropout UCI Yerellestirilmis Model")
+    print("  SHAP ANALIZI - OULAD v2")
     print("=" * 70)
 
     df = pd.read_csv(DATA_PATH)
-    X = df.drop("Target", axis=1)
-    y = df["Target"]
+    X = df.drop("target", axis=1)
+    y = df["target"]
+    X = add_engineered_features(X)
 
-    feature_list = joblib.load(FEATURES_PATH)
-    X = X[feature_list]
-
-    _, X_test, _, _ = train_test_split(
+    X_train, X_test, y_train, _ = train_test_split(
         X, y, test_size=0.30, random_state=42, stratify=y
     )
+
+    mi_scores = mutual_info_classif(X_train, y_train, random_state=42)
+    mi_df = pd.DataFrame({"feature": X_train.columns, "mi": mi_scores})
+    low_mi = mi_df.loc[mi_df["mi"] < 0.01, "feature"].tolist()
+
+    if low_mi:
+        X_train = X_train.drop(columns=low_mi)
+        X_test = X_test.drop(columns=low_mi)
+
+    feature_list = list(X_train.columns)
 
     pipeline = joblib.load(MODEL_PATH)
     scaler = pipeline.named_steps["scaler"]
@@ -90,14 +98,9 @@ def main():
         index=X_test.index,
     )
 
-    if hasattr(model, "get_booster"):
-        dmatrix = xgb.DMatrix(X_test_scaled, feature_names=feature_list)
-        raw_shap_values = model.get_booster().predict(dmatrix, pred_contribs=True)
-        shap_values = normalize_xgboost_contribs(raw_shap_values, len(feature_list))
-    else:
-        explainer = shap.TreeExplainer(model)
-        raw_shap_values = explainer.shap_values(X_test_scaled)
-        shap_values = normalize_tree_shap_values(raw_shap_values, len(feature_list))
+    dmatrix = xgb.DMatrix(X_test_scaled, feature_names=feature_list)
+    raw_shap_values = model.get_booster().predict(dmatrix, pred_contribs=True)
+    shap_values = normalize_xgboost_contribs(raw_shap_values, len(feature_list))
 
     mean_abs_by_class = np.abs(shap_values).mean(axis=0)
     if mean_abs_by_class.shape[1] == 1:
@@ -105,13 +108,19 @@ def main():
     else:
         mean_abs_global = mean_abs_by_class.mean(axis=1)
 
-    importance_df = pd.DataFrame({
-        "feature": feature_list,
-        "mean_abs_shap": mean_abs_global,
-    })
+    importance_df = pd.DataFrame(
+        {
+            "feature": feature_list,
+            "mean_abs_shap": mean_abs_global,
+        }
+    )
 
     for class_idx in range(mean_abs_by_class.shape[1]):
-        class_name = TARGET_NAMES[class_idx] if class_idx < len(TARGET_NAMES) else f"class_{class_idx}"
+        class_name = (
+            TARGET_NAMES[class_idx]
+            if class_idx < len(TARGET_NAMES)
+            else f"class_{class_idx}"
+        )
         importance_df[f"mean_abs_shap_{class_name}"] = mean_abs_by_class[:, class_idx]
 
     importance_df = importance_df.sort_values("mean_abs_shap", ascending=False)
@@ -122,8 +131,13 @@ def main():
 
     top_df = importance_df.head(15).sort_values("mean_abs_shap")
     fig, ax = plt.subplots(figsize=(10, 8))
-    ax.barh(top_df["feature"], top_df["mean_abs_shap"], color="steelblue", edgecolor="black")
-    ax.set_title("SHAP Global Feature Importance - Dropout Localized", fontsize=13, fontweight="bold")
+    ax.barh(
+        top_df["feature"],
+        top_df["mean_abs_shap"],
+        color="steelblue",
+        edgecolor="black",
+    )
+    ax.set_title("SHAP Global Feature Importance - OULAD", fontsize=13, fontweight="bold")
     ax.set_xlabel("Ortalama mutlak SHAP etkisi")
     plt.tight_layout()
     bar_path = f"{OUTPUT_DIR}/01_shap_global_importance.png"
@@ -133,16 +147,18 @@ def main():
 
     if mean_abs_by_class.shape[1] > 1:
         class_rows = []
-        for class_idx, class_name in enumerate(TARGET_NAMES[:mean_abs_by_class.shape[1]]):
+        for class_idx, class_name in enumerate(TARGET_NAMES[: mean_abs_by_class.shape[1]]):
             values = mean_abs_by_class[:, class_idx]
             order = np.argsort(values)[::-1][:10]
             for rank, feature_idx in enumerate(order, start=1):
-                class_rows.append({
-                    "class": class_name,
-                    "rank": rank,
-                    "feature": feature_list[feature_idx],
-                    "mean_abs_shap": values[feature_idx],
-                })
+                class_rows.append(
+                    {
+                        "class": class_name,
+                        "rank": rank,
+                        "feature": feature_list[feature_idx],
+                        "mean_abs_shap": values[feature_idx],
+                    }
+                )
 
         class_df = pd.DataFrame(class_rows)
         class_csv_path = f"{OUTPUT_DIR}/shap_feature_importance_by_class.csv"
@@ -154,7 +170,11 @@ def main():
             axes = [axes]
 
         for class_idx, ax in enumerate(axes):
-            class_name = TARGET_NAMES[class_idx] if class_idx < len(TARGET_NAMES) else f"class_{class_idx}"
+            class_name = (
+                TARGET_NAMES[class_idx]
+                if class_idx < len(TARGET_NAMES)
+                else f"class_{class_idx}"
+            )
             values = mean_abs_by_class[:, class_idx]
             order = np.argsort(values)[::-1][:10]
             plot_features = [feature_list[i] for i in order][::-1]
@@ -163,7 +183,7 @@ def main():
             ax.set_title(class_name, fontsize=12, fontweight="bold")
             ax.set_xlabel("Mean |SHAP|")
 
-        plt.suptitle("Class-wise SHAP Feature Importance", fontsize=14, fontweight="bold")
+        plt.suptitle("Class-wise SHAP Feature Importance - OULAD", fontsize=14, fontweight="bold")
         plt.tight_layout()
         class_plot_path = f"{OUTPUT_DIR}/02_shap_class_importance.png"
         plt.savefig(class_plot_path, dpi=150, bbox_inches="tight")
