@@ -4,3 +4,7 @@ dataset
 chatbot/api_key.txt
 **/.DS_Store
 datasets/oulad/studentVle.csv
+__pycache__/
+.pytest_cache/
+.pycache_compile/
+.matplotlib/

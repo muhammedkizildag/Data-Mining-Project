@@ -1,218 +1,87 @@
-import pandas as pd
-import numpy as np
-import warnings
-warnings.filterwarnings('ignore')
+from preprocessing.common import (
+    OULAD_KEY_COLS,
+    OULAD_TARGET_NAMES,
+    apply_oulad_target_mapping,
+    encode_oulad_categories,
+    ensure_output_dir,
+    fill_oulad_missing_values,
+    load_oulad_tables,
+    merge_oulad_tables,
+)
 
-print("=" * 70)
-print("  OULAD — VERİ HAZIRLAMA (7 Tablo → 1 Dataset)")
-print("=" * 70)
 
-base = "datasets/oulad"
+def main():
+    ensure_output_dir()
+    tables = load_oulad_tables()
+    mapped_student_info = apply_oulad_target_mapping(tables["studentInfo"])
 
-studentInfo = pd.read_csv(f"{base}/studentInfo.csv")
-assessments = pd.read_csv(f"{base}/assessments.csv")
-studentAssessment = pd.read_csv(f"{base}/studentAssessment.csv")
-vle = pd.read_csv(f"{base}/vle.csv")
-studentVle = pd.read_csv(f"{base}/studentVle.csv")
-studentRegistration = pd.read_csv(f"{base}/studentRegistration.csv")
-courses = pd.read_csv(f"{base}/courses.csv")
+    print("=" * 70)
+    print("  OULAD — VERİ HAZIRLAMA (7 Tablo → 1 Dataset)")
+    print("=" * 70)
+    for name, frame in tables.items():
+        print(f"\n  {name:<20}: {frame.shape}")
 
-print(f"\n  studentInfo:         {studentInfo.shape}")
-print(f"  assessments:         {assessments.shape}")
-print(f"  studentAssessment:   {studentAssessment.shape}")
-print(f"  vle:                 {vle.shape}")
-print(f"  studentVle:          {studentVle.shape}")
-print(f"  studentRegistration: {studentRegistration.shape}")
-print(f"  courses:             {courses.shape}")
+    print("\n" + "=" * 70)
+    print("  HEDEF DEĞİŞKEN DÖNÜŞÜMÜ")
+    print("=" * 70)
+    print(f"\n  Orijinal (4 sınıf):")
+    print(f"  {tables['studentInfo']['final_result'].value_counts().to_dict()}")
+    print(f"\n  Yeni (3 sınıf):")
+    for val in [0, 1, 2]:
+        cnt = (mapped_student_info["target"] == val).sum()
+        pct = cnt / len(mapped_student_info) * 100
+        print(f"    {OULAD_TARGET_NAMES[val]}: {cnt} (%{pct:.1f})")
 
-# ============================================================
-# HEDEF DEĞİŞKEN: 4 sınıf → 3 sınıf
-# ============================================================
-print("\n" + "=" * 70)
-print("  HEDEF DEĞİŞKEN DÖNÜŞÜMÜ")
-print("=" * 70)
+    print("\n" + "=" * 70)
+    print("  ASSESSMENT ÖZELLİKLERİ")
+    print("=" * 70)
+    print("  Assessment ve VLE özellikleri yardımcı fonksiyonlarla oluşturuluyor.")
 
-print(f"\n  Orijinal (4 sınıf):")
-print(f"  {studentInfo['final_result'].value_counts().to_dict()}")
+    print("\n" + "=" * 70)
+    print("  TABLOLARI BİRLEŞTİR")
+    print("=" * 70)
+    merged = merge_oulad_tables(tables)
+    print(f"  Birleştirme sonrası: {merged.shape[0]} satır × {merged.shape[1]} sütun")
 
-target_map = {
-    'Withdrawn': 0,
-    'Fail': 1,
-    'Pass': 2,
-    'Distinction': 2
-}
-studentInfo['target'] = studentInfo['final_result'].map(target_map)
+    filled = fill_oulad_missing_values(merged)
+    print(f"  Eksik veri sonrası: {filled.isnull().sum().sum()} eksik")
 
-target_names = {0: 'Withdrawn', 1: 'Fail', 2: 'Pass'}
-print(f"\n  Yeni (3 sınıf):")
-for val in [0, 1, 2]:
-    cnt = (studentInfo['target'] == val).sum()
-    pct = cnt / len(studentInfo) * 100
-    print(f"    {target_names[val]}: {cnt} (%{pct:.1f})")
+    print("\n" + "=" * 70)
+    print("  KAYIT ÖZELLİKLERİ")
+    print("=" * 70)
+    print("  Kayıt özellikleri: date_registration")
+    print("  NOT: 'unregistered' çıkarıldı (hedefe çok yakın özellik — target leakage riski)")
 
-# ============================================================
-# ÖĞRENCİ BAZLI UNIQUE KEY
-# ============================================================
-key_cols = ['code_module', 'code_presentation', 'id_student']
+    print("\n" + "=" * 70)
+    print("  ENCODING")
+    print("=" * 70)
+    encoded, encodings = encode_oulad_categories(filled)
+    print(f"  Kategorik sütunlar: {list(encodings.keys())}")
+    for col, mapping in encodings.items():
+        print(f"    {col}: {mapping}")
 
-# ============================================================
-# ASSESSMENT ÖZELLİKLERİ
-# ============================================================
-print("\n" + "=" * 70)
-print("  ASSESSMENT ÖZELLİKLERİ")
-print("=" * 70)
+    output_path = "preprocessing/oulad_processed.csv"
+    encoded.to_csv(output_path, index=False)
 
-sa = studentAssessment.merge(assessments, on='id_assessment', how='left')
+    print("\n" + "=" * 70)
+    print("  SONUÇ")
+    print("=" * 70)
+    print("  NOT: Normalizasyon ve MI feature selection modeling aşamasında")
+    print("       train/test split sonrası yapılacak (data leakage önlemi).")
+    print(f"  Final veri seti: {encoded.shape[0]} satır × {encoded.shape[1]} sütun")
+    print(f"  Özellik sayısı: {encoded.shape[1] - 1}")
+    print(f"  Hedef: target (0=Withdrawn, 1=Fail, 2=Pass)")
+    print(f"\n  Sınıf dağılımı:")
+    for val in [0, 1, 2]:
+        cnt = (encoded["target"] == val).sum()
+        pct = cnt / len(encoded) * 100
+        print(f"    {OULAD_TARGET_NAMES[val]}: {cnt} (%{pct:.1f})")
+    print(f"\n  Kaydedildi: {output_path}")
 
-sa_agg = sa.groupby(key_cols).agg(
-    avg_score=('score', 'mean'),
-    std_score=('score', 'std'),
-    min_score=('score', 'min'),
-    max_score=('score', 'max'),
-    num_assessments=('score', 'count'),
-    num_missing_score=('score', lambda x: x.isnull().sum()),
-).reset_index()
-sa_agg['std_score'] = sa_agg['std_score'].fillna(0)
+    print("\n" + "=" * 70)
+    print("  VERİ HAZIRLAMA TAMAMLANDI")
+    print("=" * 70)
 
-for atype in ['TMA', 'CMA', 'Exam']:
-    subset = sa[sa['assessment_type'] == atype]
-    type_agg = subset.groupby(key_cols).agg(
-        **{f'avg_score_{atype}': ('score', 'mean'),
-           f'num_{atype}': ('score', 'count')}
-    ).reset_index()
-    sa_agg = sa_agg.merge(type_agg, on=key_cols, how='left')
 
-sa_agg = sa_agg.fillna(0)
-
-submit = sa.dropna(subset=['date_submitted', 'date']).copy()
-submit['submit_delay'] = submit['date_submitted'] - submit['date']
-delay_agg = submit.groupby(key_cols).agg(
-    avg_submit_delay=('submit_delay', 'mean'),
-    late_submissions=('submit_delay', lambda x: (x > 0).sum()),
-    early_submissions=('submit_delay', lambda x: (x <= 0).sum()),
-).reset_index()
-sa_agg = sa_agg.merge(delay_agg, on=key_cols, how='left')
-sa_agg = sa_agg.fillna(0)
-
-print(f"  Assessment özellikleri: {sa_agg.shape[1] - 3} özellik")
-print(f"  Özellikler: {[c for c in sa_agg.columns if c not in key_cols]}")
-
-# ============================================================
-# VLE (SANAL ÖĞRENME ORTAMI) ÖZELLİKLERİ
-# ============================================================
-print("\n" + "=" * 70)
-print("  VLE ÖZELLİKLERİ (10.6M tıklama → öğrenci bazlı)")
-print("=" * 70)
-
-sv = studentVle.merge(vle[['id_site', 'activity_type']], on='id_site', how='left')
-
-vle_total = sv.groupby(key_cols).agg(
-    total_clicks=('sum_click', 'sum'),
-    total_vle_days=('date', 'nunique'),
-    avg_daily_clicks=('sum_click', 'mean'),
-    num_distinct_activities=('id_site', 'nunique'),
-).reset_index()
-
-top_activities = ['resource', 'oucontent', 'url', 'forumng', 'quiz',
-                  'subpage', 'homepage', 'questionnaire', 'page']
-for act in top_activities:
-    act_sub = sv[sv['activity_type'] == act]
-    act_agg = act_sub.groupby(key_cols).agg(
-        **{f'clicks_{act}': ('sum_click', 'sum')}
-    ).reset_index()
-    vle_total = vle_total.merge(act_agg, on=key_cols, how='left')
-
-vle_total = vle_total.fillna(0)
-
-print(f"  VLE özellikleri: {vle_total.shape[1] - 3} özellik")
-print(f"  Özellikler: {[c for c in vle_total.columns if c not in key_cols]}")
-
-# ============================================================
-# KAYIT ÖZELLİKLERİ
-# ============================================================
-print("\n" + "=" * 70)
-print("  KAYIT ÖZELLİKLERİ")
-print("=" * 70)
-
-reg = studentRegistration.copy()
-reg_features = reg[key_cols + ['date_registration']]
-
-print(f"  Kayıt özellikleri: date_registration")
-print(f"  NOT: 'unregistered' çıkarıldı (hedefe çok yakın özellik — target leakage riski)")
-
-# ============================================================
-# DERS ÖZELLİKLERİ
-# ============================================================
-course_features = courses.rename(columns={'module_presentation_length': 'course_length'})
-
-# ============================================================
-# HEPSİNİ BİRLEŞTİR
-# ============================================================
-print("\n" + "=" * 70)
-print("  TABLOLARI BİRLEŞTİR")
-print("=" * 70)
-
-df = studentInfo.copy()
-df = df.merge(sa_agg, on=key_cols, how='left')
-df = df.merge(vle_total, on=key_cols, how='left')
-df = df.merge(reg_features, on=key_cols, how='left')
-df = df.merge(course_features, on=['code_module', 'code_presentation'], how='left')
-
-print(f"  Birleştirme sonrası: {df.shape[0]} satır × {df.shape[1]} sütun")
-
-numeric_fill_cols = [c for c in df.columns if df[c].dtype in ['float64', 'int64'] and c != 'target']
-for c in numeric_fill_cols:
-    if df[c].isnull().sum() > 0:
-        df[c] = df[c].fillna(0)
-
-df['imd_band'] = df['imd_band'].fillna(df['imd_band'].mode()[0])
-
-print(f"  Eksik veri sonrası: {df.isnull().sum().sum()} eksik")
-
-# ============================================================
-# ENCODING
-# ============================================================
-print("\n" + "=" * 70)
-print("  ENCODING")
-print("=" * 70)
-
-from sklearn.preprocessing import LabelEncoder
-
-drop_cols = ['code_module', 'code_presentation', 'id_student', 'final_result']
-df = df.drop(columns=drop_cols)
-
-cat_cols = df.select_dtypes(include='object').columns.tolist()
-print(f"  Kategorik sütunlar: {cat_cols}")
-
-le_dict = {}
-for col in cat_cols:
-    le = LabelEncoder()
-    df[col] = le.fit_transform(df[col])
-    le_dict[col] = dict(zip(le.classes_, le.transform(le.classes_)))
-    print(f"    {col}: {le_dict[col]}")
-
-# ============================================================
-# KAYDET (normalizasyon ve MI feature selection modeling aşamasında yapılacak)
-# ============================================================
-print("\n" + "=" * 70)
-print("  SONUÇ")
-print("=" * 70)
-print("  NOT: Normalizasyon ve MI feature selection modeling aşamasında")
-print("       train/test split sonrası yapılacak (data leakage önlemi).")
-
-output_path = "preprocessing/oulad_processed.csv"
-df.to_csv(output_path, index=False)
-
-print(f"  Final veri seti: {df.shape[0]} satır × {df.shape[1]} sütun")
-print(f"  Özellik sayısı: {df.shape[1] - 1}")
-print(f"  Hedef: target (0=Withdrawn, 1=Fail, 2=Pass)")
-print(f"\n  Sınıf dağılımı:")
-for val in [0, 1, 2]:
-    cnt = (df['target'] == val).sum()
-    pct = cnt / len(df) * 100
-    print(f"    {target_names[val]}: {cnt} (%{pct:.1f})")
-print(f"\n  Kaydedildi: {output_path}")
-
-print("\n" + "=" * 70)
-print("  VERİ HAZIRLAMA TAMAMLANDI")
-print("=" * 70)
+if __name__ == "__main__":
+    main()

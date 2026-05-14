@@ -71,6 +71,12 @@ Data-Mining-Project/
 
 Güncel sonuçlar için esas dosyalar `preprocessing/preprocess_dropout.py`, `preprocessing/prepare_oulad.py`, `modeling/model_dropout_localized.py`, `modeling/model_oulad_v2.py` ve `chatbot/app.py` dosyalarıdır. Bazı eski model/ablation dosyaları geçmiş karşılaştırmaları korumak için repoda tutulur; başlarında legacy uyarısı bulunan bu dosyalar güncel metodolojik sonuç olarak kullanılmamalıdır.
 
+Hızlı referans:
+
+- aktif modelleme dosyaları: `modeling/model_dropout_localized.py`, `modeling/model_oulad_v2.py`
+- tarihsel/legacy dosyalar: `modeling/legacy/model_dropout.py`, `modeling/legacy/model_dropout_v2.py`, `modeling/legacy/model_habits.py`, `modeling/legacy/model_habits_v2.py`, `modeling/legacy/model_oulad.py`, `modeling/legacy/ablation_study.py`, `modeling/legacy/ablation_study_oulad.py`
+- ayrıntılı not: `modeling/LEGACY.md`
+
 ## Kurulum
 
 Python 3.9+ önerilir.
@@ -85,6 +91,20 @@ Bağımlılıklar `requirements.txt` dosyasında listelenmiştir:
 
 ```bash
 pip install -r requirements.txt
+```
+
+İstersen aynı temel işleri `Makefile` üzerinden de çalıştırabilirsin:
+
+```bash
+make help
+make quality
+```
+
+Alternatif olarak Python tabanlı görev çalıştırıcısı da var:
+
+```bash
+python3 run_pipeline.py test
+python3 run_pipeline.py preprocess
 ```
 
 ## Çalıştırma Sırası
@@ -118,6 +138,12 @@ python preprocessing/preprocess_dropout.py
 python preprocessing/prepare_oulad.py
 ```
 
+Kısayol:
+
+```bash
+make preprocess
+```
+
 Çıktılar:
 
 | Dosya | Boyut | Hedef dağılımı |
@@ -136,18 +162,24 @@ python modeling/model_dropout_localized.py
 python modeling/model_oulad_v2.py
 ```
 
+Kısayol:
+
+```bash
+make train
+```
+
 `model_dropout_localized.py`, chatbotta kullanılan Türkiye'ye uyarlanmış Dropout UCI modelini üretir. `model_oulad_v2.py`, `unregistered` target leakage özelliği çıkarılmış OULAD modelidir.
 
 Legacy/geçmiş karşılaştırma dosyaları:
 
 ```bash
-python modeling/model_dropout.py
-python modeling/model_dropout_v2.py
-python modeling/model_habits.py
-python modeling/model_habits_v2.py
-python modeling/model_oulad.py
-python modeling/ablation_study.py
-python modeling/ablation_study_oulad.py
+python modeling/legacy/model_dropout.py
+python modeling/legacy/model_dropout_v2.py
+python modeling/legacy/model_habits.py
+python modeling/legacy/model_habits_v2.py
+python modeling/legacy/model_oulad.py
+python modeling/legacy/ablation_study.py
+python modeling/legacy/ablation_study_oulad.py
 ```
 
 Bu legacy dosyalar güncel preprocessing çıktılarıyla birebir uyumlu olmayabilir ve bazı eski dosyalarda split öncesi scaler/feature engineering kullanımı bulunduğu için güncel final sonuç olarak raporlanmamalıdır.
@@ -173,6 +205,12 @@ Güncel modelleme script'leri ayrıca seçilen final model için şu ek grafikle
 python chatbot/prepare_chatbot.py
 ```
 
+Kısayol:
+
+```bash
+make chatbot-prep
+```
+
 Bu adım chatbotun ihtiyaç duyduğu şu dosyaları üretir/günceller:
 
 - `chatbot/feature_config.json`
@@ -180,17 +218,63 @@ Bu adım chatbotun ihtiyaç duyduğu şu dosyaları üretir/günceller:
 
 ### 5. Smoke testleri
 
-Temel artifact ve şema kontrollerini çalıştırmak için:
+Temel artifact, şema ve chatbot yardımcı fonksiyon kontrollerini çalıştırmak için:
 
 ```bash
-python -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -v
+```
+
+Kısayol:
+
+```bash
+make test
+make quality
 ```
 
 Bu testler şunları doğrular:
 - kaydedilmiş Dropout Localized modelinin yüklenip örnek tahmin üretebildiğini,
 - chatbot feature sırasının model feature listesiyle eşleştiğini,
 - kaydedilmiş OULAD modelinin örnek tahmin üretebildiğini,
-- işlenmiş veri dosyalarında beklenen target/feature şemasının bulunduğunu.
+- işlenmiş veri dosyalarında beklenen target/feature şemasının bulunduğunu,
+- chatbot veri temizleme ve ölçek dönüşüm yardımcılarının beklenen şekilde çalıştığını.
+
+### 6. Sürekli entegrasyon
+
+Repoda GitHub Actions tabanlı temel bir CI hattı bulunur:
+
+- workflow: `.github/workflows/ci.yml`
+- Python 3.11 üzerinde bağımlılıklar kurulur
+- `python -m unittest discover -s tests -v` komutu çalıştırılır
+
+Bu hat, testlerin yalnızca yerelde değil pull request ve push akışında da otomatik doğrulanmasını sağlar.
+
+## Makefile Komutları
+
+Projede tekrarlanan geliştirme akışları için bir `Makefile` bulunur:
+
+- `make install` — bağımlılıkları kurar
+- `make eda` — tüm EDA scriptlerini çalıştırır
+- `make preprocess` — güncel preprocessing adımlarını çalıştırır
+- `make train` — güncel Dropout ve OULAD modellerini üretir
+- `make shap` — SHAP grafiklerini üretir
+- `make chatbot-prep` — chatbot konfigürasyon dosyalarını günceller
+- `make chatbot` — Streamlit uygulamasını başlatır
+- `make test` — testleri çalıştırır
+- `make compile` — syntax derleme kontrolü yapar
+- `make quality` — compile + test akışını tek komutta çalıştırır
+- `make clean` — geçici cache dizinlerini temizler
+
+Not:
+- Test ve runner komutları `MPLCONFIGDIR=.matplotlib` ile çalıştırılır; bu, Matplotlib cache uyarılarını ve geçici sistem dizini kullanımını azaltır.
+
+`Makefile` kullanmak istemezsen eşdeğer Python görev çalıştırıcısı üzerinden de ana akışlar çağrılabilir:
+
+- `python3 run_pipeline.py eda`
+- `python3 run_pipeline.py preprocess`
+- `python3 run_pipeline.py train`
+- `python3 run_pipeline.py shap`
+- `python3 run_pipeline.py chatbot-prep`
+- `python3 run_pipeline.py test`
 
 ## Chatbot
 

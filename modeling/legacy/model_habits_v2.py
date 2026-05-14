@@ -22,8 +22,16 @@ from imblearn.over_sampling import SMOTE
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from modeling.legacy_notice import print_legacy_notice
+
 plt.rcParams['figure.figsize'] = (12, 6)
 sns.set_style("whitegrid")
+
+print_legacy_notice(
+    script_name="model_habits_v2.py",
+    current_script="modeling/model_oulad_v2.py",
+    reason="Student Habits v2 hattı artık aktif değildir; yalnızca geçmiş çalışma referansıdır.",
+)
 
 output_dir = "modeling/plots_habits_v2"
 os.makedirs(output_dir, exist_ok=True)

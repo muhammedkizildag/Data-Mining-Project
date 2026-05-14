@@ -16,6 +16,14 @@ from xgboost import XGBClassifier
 from sklearn.metrics import f1_score
 from sklearn.preprocessing import MinMaxScaler
 
+from modeling.legacy_notice import print_legacy_notice
+
+print_legacy_notice(
+    script_name="ablation_study_oulad.py",
+    current_script="modeling/model_oulad_v2.py",
+    reason="bu ablation dosyası eski preprocessing varsayımlarını taşıyabilir; aktif final raporu değildir.",
+)
+
 print("=" * 70)
 print("  ABLATION STUDY — OULAD")
 print("  (Her iyileştirmenin bireysel etkisi)")

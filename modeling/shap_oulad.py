@@ -1,5 +1,4 @@
 import os
-import warnings
 
 import joblib
 import matplotlib
@@ -11,8 +10,6 @@ import pandas as pd
 import xgboost as xgb
 from sklearn.feature_selection import mutual_info_classif
 from sklearn.model_selection import train_test_split
-
-warnings.filterwarnings("ignore")
 
 
 OUTPUT_DIR = "modeling/plots_shap_oulad"

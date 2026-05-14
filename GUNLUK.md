@@ -1558,3 +1558,277 @@ Her iki modelleme dosyasında:
 - CV skoru ile test skoru arasındaki küçük farklar beklenen varyans. Yakın olmaları modelin generalize ettiğini gösterir.
 - Dropout modelinde Random Forest'ın seçilmesi, sample_weight düzeltmesinin etkisi: XGBoost artık her fold'da tutarlı ağırlıklarla eğitilince CV skoru biraz düştü ve RF öne geçti.
 - Bu düzeltmeyle raporlanan skorlar artık metodolojik olarak temiz: test seti hiçbir karar sürecine karışmıyor.
+
+---
+
+## Kod Kalitesi İyileştirme - Chatbot Çekirdeği ve Testlenebilirlik (14 Mayıs 2026)
+
+### Problem
+
+Kod incelemesi sonrası en kırılgan alanın chatbot tarafı olduğu netleşti:
+
+- `chatbot/app.py` hem Streamlit arayüzü hem veri temizleme hem prompt üretimi hem de LLM entegrasyonunu tek dosyada topluyordu.
+- LLM'den gelen veriler temizleniyordu ama sayısal aralık ve kategorik kod doğrulaması tek bir merkezde ve testle güvence altına alınmamıştı.
+- Hata durumlarında teknik istisna metni kullanıcıya kadar çıkabiliyordu.
+- `requirements.txt` sürümleri sabit değildi; farklı makinelerde aynı davranışı tekrar üretmek zorlaşabilirdi.
+
+### Uygulanan Değişiklikler
+
+1. **Chatbot çekirdeği ayrıldı**
+   - `chatbot/core.py` eklendi.
+   - Prompt üretimi, typo düzeltme, kategorik değer eşleme, not/puan dönüşümü, `[DATA]` parse etme ve metin temizleme gibi saf iş kuralları bu dosyaya taşındı.
+   - Böylece iş mantığı Streamlit arayüzünden ayrıldı ve bağımsız testlenebilir hale geldi.
+
+2. **`chatbot/app.py` sadeleştirildi**
+   - Dosya `Path` tabanlı hale getirildi; hard-coded göreli path kullanımı azaltıldı.
+   - `feature_config` ve `reference_stats` yüklemeleri ile system prompt üretimi cache'li yapıya alındı.
+   - LLM çağrısı tek bir `chat_with_llm()` fonksiyonunda toplandı.
+   - API anahtarı eksikse veya uzak servis çağrısı patlarsa kullanıcıya kontrollü ve güvenli hata mesajı gösterilecek şekilde akış sıkılaştırıldı.
+
+3. **Veri doğrulama sertleştirildi**
+   - Sayısal alanlarda model girdisine uygun alt/üst sınırlar uygulandı.
+   - Kategorik alanlarda yalnızca `feature_config.json` içindeki geçerli kodlar kabul edilir hale getirildi.
+   - Böylece LLM'in ürettiği uç veya geçersiz değerlerin doğrudan modele gitmesi engellendi.
+
+4. **Birim test katmanı genişletildi**
+   - `tests/test_chatbot_core.py` eklendi.
+   - Kapsam:
+     - typo ile gelen feature adının düzeltilmesi,
+     - 4'lük / 100'lük not sisteminin 20'lik ölçeğe çevrilmesi,
+     - YKS ve önceki eğitim notunun veri seti aralığına dönüştürülmesi,
+     - geçersiz kategorik değerlerin reddedilmesi ve uç sayısal değerlerin clamp edilmesi,
+     - `[DATA]` bloğunun parse edilip temizlenmesi.
+
+5. **Ortam tekrarlanabilirliği iyileştirildi**
+   - `requirements.txt` dosyasındaki paket sürümleri sabitlendi.
+   - `.gitignore` dosyasına `__pycache__`, `.pytest_cache`, `.pycache_compile`, `.matplotlib` eklendi.
+
+### Sonuç
+
+Bu adım sonrası proje sadece çalışan bir demo değil, daha net sınırları olan ve testle korunabilen bir yazılım parçasına yaklaştı. Özellikle chatbot mantığının arayüzden ayrılması, sonraki refactor ve kalite artışı adımları için sağlam bir temel oluşturdu.
+
+---
+
+## Kod Kalitesi İyileştirme - Modelleme Script Refactor'u (14 Mayıs 2026)
+
+### Problem
+
+Chatbot tarafı toparlandıktan sonra en büyük sürdürülebilirlik borcu modelleme katmanında kaldı:
+
+- `modeling/model_dropout_localized.py` ve `modeling/model_oulad_v2.py` içinde ROC/PR çizimi, learning curve hesabı, 10-fold CV değerlendirmesi, confusion matrix ve feature importance üretimi neredeyse birebir kopyaydı.
+- Aynı metodoloji iki farklı dosyada tutulduğu için küçük bir hata düzeltmesi veya iyileştirme iki yere birden elle uygulanmak zorundaydı.
+- Bu yapı yeni model script'leri eklendikçe tekrar miktarını artıracak ve davranış tutarlılığını zayıflatacaktı.
+
+### Uygulanan Değişiklikler
+
+1. **Ortak yardımcı modül oluşturuldu**
+   - `modeling/common.py` eklendi.
+   - Şu ortak işler tek yerde toplandı:
+     - çıktı klasörü oluşturma,
+     - çok sınıflı ROC/PR çizimi,
+     - learning curve hesabı,
+     - XGBoost sample_weight mantığını koruyan 10-fold CV değerlendirmesi,
+     - CV boxplot kaydı,
+     - confusion matrix kaydı,
+     - feature importance grafiği kaydı.
+
+2. **Modelleme dosyaları sadeleştirildi**
+   - `modeling/model_dropout_localized.py` yeniden düzenlendi.
+   - `modeling/model_oulad_v2.py` yeniden düzenlendi.
+   - Her iki dosyada tekrar eden görselleştirme ve CV kodları ortak yardımcı fonksiyonları kullanacak şekilde indirildi.
+   - Script'lerde dataset'e özgü iş kuralları bırakıldı; genel altyapı kodu ortak modüle taşındı.
+
+3. **Paket yapısı netleştirildi**
+   - `modeling/__init__.py` eklendi.
+   - Böylece ortak yardımcı modül güvenli şekilde import edilebilir hale geldi.
+
+### Sonuç
+
+Bu adımla modelleme katmanında davranış aynı kalırken kod tekrarının önemli kısmı temizlenmiş oldu. En kritik kazanım, değerlendirme metodolojisinin artık tek yerde yaşaması: bundan sonra ROC/PR, CV ya da learning curve mantığında yapılacak bir düzeltme iki ayrı script'te elle aranmayacak.
+
+---
+
+## Sürekli Entegrasyon ve README Senkronizasyonu (14 Mayıs 2026)
+
+### Problem
+
+Yerelde testler çalışsa da repo içinde bunu otomatik zorlayan bir kalite kapısı yoktu. Ayrıca README test katmanının yeni kapsamını ve otomatik doğrulama bilgisini tam yansıtmıyordu.
+
+### Uygulanan Değişiklikler
+
+1. **GitHub Actions CI eklendi**
+   - `.github/workflows/ci.yml` dosyası oluşturuldu.
+   - Her `push` ve `pull_request` için:
+     - Python 3.11 kurulur,
+     - bağımlılıklar `requirements.txt` üzerinden yüklenir,
+     - `python -m unittest discover -s tests -v` çalıştırılır.
+
+2. **README güncellendi**
+   - Test komutu `python3` ile netleştirildi.
+   - Testlerin artık chatbot yardımcı fonksiyonlarını da kapsadığı belirtildi.
+   - Yeni CI hattı README'ye eklendi; böylece repo açıldığında kalite doğrulama mekanizması belgede görünür hale geldi.
+
+### Sonuç
+
+Bu adımla kalite kontrolü sadece yerel disipline bağlı olmaktan çıktı. Testlerin otomatik çalışan bir repoya taşınması, sonraki refactor adımlarında geriye dönük kırılmaları daha erken yakalayacak.
+
+---
+
+## Çalıştırma Orkestrasyonu - Makefile (14 Mayıs 2026)
+
+### Problem
+
+Kod kalitesi iyileşse de günlük geliştirme akışı hâlâ dağınık komutlara dayanıyordu:
+
+- preprocessing, modelleme, chatbot hazırlığı ve test için birden fazla komut ezberlemek gerekiyordu,
+- kalite kontrolü için `py_compile` ve `unittest` komutları ayrı ayrı çalıştırılıyordu,
+- yeni biri repoyu açtığında hangi kısa komutların ana akış olduğunu doğrudan göremiyordu.
+
+### Uygulanan Değişiklikler
+
+1. **`Makefile` eklendi**
+   - `make install`
+   - `make eda`
+   - `make unzip-oulad`
+   - `make preprocess`
+   - `make train`
+   - `make train-dropout`
+   - `make train-oulad`
+   - `make shap`
+   - `make chatbot-prep`
+   - `make chatbot`
+   - `make test`
+   - `make compile`
+   - `make quality`
+   - `make clean`
+
+2. **Kalite komutları standartlaştırıldı**
+   - `make compile` ana Python dosyaları için syntax derleme kontrolü yapar.
+   - `make test` mevcut unittest katmanını çalıştırır.
+   - `make quality` bu ikisini tek komutta birleştirir.
+
+3. **README güncellendi**
+   - Kurulum ve çalışma adımlarına `make` kısayolları eklendi.
+   - Ayrı bir “Makefile Komutları” bölümü oluşturuldu.
+
+### Sonuç
+
+Bu adımla proje yalnızca kod düzeyinde değil, kullanım ergonomisi açısından da daha düzenli hale geldi. Özellikle `make quality` ve `make train` gibi giriş noktaları, hem bakım hem de teslim sürecinde hata payını azaltacak.
+
+---
+
+## Legacy Dosyaların Sınırlarını Netleştirme (14 Mayıs 2026)
+
+### Problem
+
+Repo içinde hem güncel hem de tarihsel modelleme dosyaları birlikte durduğu için yanlış script'in çalıştırılması hâlâ gerçek bir riskti. README bunu sözel olarak anlatsa da kod seviyesinde görünür bir bariyer yeterince güçlü değildi.
+
+### Uygulanan Değişiklikler
+
+1. **Ortak legacy uyarı yardımcısı eklendi**
+   - `modeling/legacy.py` oluşturuldu.
+   - Legacy script'ler çalıştırıldığında güncel karşılığını ve neden legacy olduğunu açıkça basan ortak bir banner eklendi.
+
+2. **Legacy script'lere runtime uyarısı eklendi**
+   - `model_dropout.py`
+   - `model_dropout_v2.py`
+   - `model_habits.py`
+   - `model_habits_v2.py`
+   - `model_oulad.py`
+   - `ablation_study.py`
+   - `ablation_study_oulad.py`
+
+3. **Legacy dokümantasyonu eklendi**
+   - `modeling/LEGACY.md` oluşturuldu.
+   - Aktif script'ler ile tarihsel script'ler ayrı listelendi.
+   - Legacy dosyaların neden final referans alınmaması gerektiği netleştirildi.
+
+4. **README netleştirildi**
+   - Aktif modelleme dosyaları ve legacy dosyalar hızlı referans bölümüyle açıkça ayrıldı.
+
+### Sonuç
+
+Bu adım, yanlış modelleme dosyasını yanlış amaçla çalıştırma riskini düşürdü. Özellikle repo yeni açıldığında veya birkaç ay sonra geri dönüldüğünde hangi dosyanın kanonik olduğu artık hem dokümanda hem runtime çıktısında daha net.
+
+---
+
+## Preprocessing Refactor, Test Genişletme ve Legacy İzolasyonu (14 Mayıs 2026)
+
+### Problem
+
+Kalan kalite başlıkları artık üç yerde toplanıyordu:
+
+- preprocessing dosyaları büyük script blokları halinde duruyordu,
+- modelleme yardımcıları için doğrudan test yoktu,
+- legacy dosyalar uyarı verse de fiziksel olarak aktif dosyalarla aynı seviyede duruyordu.
+
+### Uygulanan Değişiklikler
+
+1. **Preprocessing ortak katmanı oluşturuldu**
+   - `preprocessing/common.py` eklendi.
+   - Dropout target encoding, OULAD tablo yükleme, assessment/VLE feature aggregation, eksik veri doldurma ve kategorik encoding yardımcı fonksiyonlara ayrıldı.
+   - `preprocessing/preprocess_dropout.py` ve `preprocessing/prepare_oulad.py` bu ortak katmanı kullanacak şekilde sadeleştirildi.
+
+2. **Test kapsamı genişletildi**
+   - `tests/test_preprocessing_common.py` eklendi.
+   - `tests/test_modeling_common.py` eklendi.
+   - Yeni kapsam:
+     - Dropout target encoding,
+     - OULAD target mapping,
+     - eksik veri doldurma,
+     - kategorik encoding,
+     - CV özetleme ve en iyi model seçme yardımcıları.
+
+3. **Blanket warning temizliği yapıldı**
+   - Aktif modelleme ve SHAP dosyalarındaki genel `warnings.filterwarnings("ignore")` kullanımları kaldırıldı.
+   - Warning temizliği aktif yolaklarda yapıldı; legacy dosyalar fiziksel olarak ayrıldığı için ana kalite yolunu artık kirletmiyor.
+
+4. **Legacy dosyalar fiziksel olarak ayrıldı**
+   - Tarihsel modelleme script'leri `modeling/legacy/` altına taşındı.
+   - `modeling/legacy/__init__.py` eklendi.
+   - Ortak uyarı yardımcısı `modeling/legacy_notice.py` olarak ayrıldı.
+   - `modeling/LEGACY.md` ve `README.md` yeni yollarla güncellendi.
+
+5. **Python görev çalıştırıcısı eklendi**
+   - `run_pipeline.py` oluşturuldu.
+   - `eda`, `preprocess`, `train`, `shap`, `chatbot-prep`, `test` görevleri Python üzerinden de çalıştırılabilir hale geldi.
+   - Böylece `Makefile` dışında da platformdan bağımsız tek giriş noktası sağlandı.
+
+6. **Repo hijyeni ve kalite ortamı iyileştirildi**
+   - `Makefile` compile/test kapsamı yeni dosyaları içerecek şekilde genişletildi.
+   - `MPLCONFIGDIR=.matplotlib` kullanımı `Makefile`, `run_pipeline.py` ve CI hattına eklendi.
+   - Amaç Matplotlib cache uyarılarını azaltmak ve kalite komutlarını daha deterministik hale getirmekti.
+
+### Sonuç
+
+Bu adımla kalan altı başlık fiilen kapanmış oldu: preprocessing daha modüler, test katmanı daha geniş, legacy dosyalar daha güvenli izole, görev çalıştırma daha düzenli ve repo hijyeni daha kontrollü hale geldi.
+
+---
+
+## Chatbot Ölçek ve Kategorik Normalizasyon Hata Düzeltmesi (15 Mayıs 2026)
+
+### Problem
+
+Son kontrolde chatbot tarafında iki gerçek regresyon tespit edildi:
+
+- `predict_student()` içinde default değerler kullanıcı ölçeğinde kalıyor, model ölçeğine çevrilmeden pipeline'a gidiyordu.
+- Kategorik değer çözümleme fonksiyonu aksansız/Türkçesiz girişleri normalize etmediği için `kadin` gibi girdiler `kadın` ile eşleşmiyordu.
+
+### Uygulanan Değişiklikler
+
+1. **Default ölçek dönüşümü geri eklendi**
+   - `chatbot/app.py` içinde default değer yoluna yeniden `auto_convert_turkish_scale()` uygulandı.
+
+2. **Kategorik giriş normalizasyonu güçlendirildi**
+   - `chatbot/core.py` içindeki `resolve_categorical_value()` artık aday değerleri `normalize_lookup_key()` üzerinden karşılaştırıyor.
+   - Böylece `kadin` / `kadın`, `hayir` / `hayır` gibi varyantlar aynı eşleme mantığına girebiliyor.
+
+3. **Regresyon testleri eklendi**
+   - `tests/test_chatbot_core.py` içine ASCII Türkçe kategorik eşleme testi eklendi.
+   - `tests/test_chatbot_app_logic.py` ile default değerlerin model ölçeğine çevrildiği doğrulandı.
+
+### Sonuç
+
+Bu düzeltmeyle chatbotun varsayılan girdileri yeniden modelin beklediği sayısal aralığa oturdu ve LLM/klavye kaynaklı aksansız kategorik girişler daha dayanıklı hale geldi.
+
+---

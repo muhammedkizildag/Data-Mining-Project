@@ -18,9 +18,16 @@ from sklearn.metrics import f1_score
 from sklearn.preprocessing import MinMaxScaler
 from imblearn.over_sampling import SMOTE
 
+from modeling.legacy_notice import print_legacy_notice
+
 # ============================================================
 # STUDENT HABITS — ABLATION STUDY
 # ============================================================
+print_legacy_notice(
+    script_name="ablation_study.py",
+    current_script="modeling/ablation_study_oulad.py",
+    reason="bu çalışma Student Habits hattına aittir ve aktif final sonuç olarak kullanılmamalıdır.",
+)
 print("=" * 70)
 print("  ABLATION STUDY — Student Habits")
 print("  (Her iyileştirmenin bireysel etkisi)")

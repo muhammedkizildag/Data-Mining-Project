@@ -1,5 +1,4 @@
 import os
-import warnings
 
 import joblib
 import matplotlib
@@ -11,8 +10,6 @@ import pandas as pd
 import shap
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
-
-warnings.filterwarnings("ignore")
 
 
 OUTPUT_DIR = "modeling/plots_shap_dropout_localized"

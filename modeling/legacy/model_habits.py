@@ -1,6 +1,8 @@
-# ⚠️ UYARI: Bu dosya v1 baseline modelidir, aktif değildir.
-# Güncel versiyon: model_dropout_localized.py (leakage düzeltilmiş)
-# Sadece geçmiş karşılaştırma için saklanmaktadır.
+"""Legacy Student Habits modeli.
+
+Aktif final modelleme akışı için bu dosya yerine güncel README ve OULAD/Dropout
+script'leri kullanılmalıdır.
+"""
 
 import pandas as pd
 import numpy as np
@@ -19,20 +21,28 @@ from sklearn.metrics import (accuracy_score, precision_score, recall_score,
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from modeling.legacy_notice import print_legacy_notice
+
 plt.rcParams['figure.figsize'] = (12, 6)
 sns.set_style("whitegrid")
 
-output_dir = "modeling/plots_dropout"
+print_legacy_notice(
+    script_name="model_habits.py",
+    current_script="modeling/model_oulad_v2.py",
+    reason="Student Habits hattı tarihsel karşılaştırma için tutulur; aktif final çıktı değildir.",
+)
+
+output_dir = "modeling/plots_habits"
 os.makedirs(output_dir, exist_ok=True)
 
-df = pd.read_csv("preprocessing/dropout_processed.csv")
-X = df.drop('Target', axis=1)
-y = df['Target']
+df = pd.read_csv("preprocessing/habits_processed.csv")
+X = df.drop('risk_level', axis=1)
+y = df['risk_level']
 
-target_names = ['Dropout', 'Enrolled', 'Graduate']
+target_names = ['Düşük', 'Orta', 'Yüksek']
 
 print("=" * 70)
-print("  MODELLEME — Dropout UCI")
+print("  MODELLEME — Student Habits")
 print("=" * 70)
 print(f"\n  Veri: {X.shape[0]} satır × {X.shape[1]} özellik")
 print(f"  Sınıflar: {dict(zip(target_names, [sum(y==i) for i in range(3)]))}")
@@ -66,16 +76,18 @@ baseline_models = {
     "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42)
 }
 
+baseline_results = []
 for name, model in baseline_models.items():
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
+    baseline_results.append({"Model": name, "Baseline Accuracy": f"{acc*100:.2f}%"})
     print(f"  {name:25s} → Accuracy: %{acc*100:.2f}")
 
 print(f"\n  (Bunlar referans değerler, şimdi optimize edeceğiz)")
 
 # ============================================================
-# ADIM 3: HİPERPARAMETRE OPTİMİZASYONU
+# ADIM 3: HİPERPARAMETRE OPTİMİZASYONU (GridSearchCV)
 # ============================================================
 print("\n" + "=" * 70)
 print("  ADIM 3: Hiperparametre Optimizasyonu (GridSearchCV)")
@@ -146,10 +158,11 @@ for name, model in optimized_models.items():
     cv_results[name] = scores
     print(f"  {name:20s} → Ort: %{scores.mean()*100:.2f} (±{scores.std()*100:.2f})")
 
+# CV sonuçları boxplot
 fig, ax = plt.subplots(figsize=(10, 6))
 cv_data = pd.DataFrame(cv_results)
 cv_data.boxplot(ax=ax)
-ax.set_title('10-Fold Cross Validation Sonuçları — Dropout UCI', fontsize=14, fontweight='bold')
+ax.set_title('10-Fold Cross Validation Sonuçları — Student Habits', fontsize=14, fontweight='bold')
 ax.set_ylabel('Accuracy')
 plt.tight_layout()
 plt.savefig(f"{output_dir}/01_cv_karsilastirma.png", dpi=150, bbox_inches='tight')
@@ -206,14 +219,14 @@ for i, (name, model) in enumerate(optimized_models.items()):
     axes[i].set_xlabel('Tahmin')
     axes[i].set_ylabel('Gerçek')
 
-plt.suptitle('Confusion Matrix — Dropout UCI', fontsize=15, fontweight='bold')
+plt.suptitle('Confusion Matrix — Student Habits', fontsize=15, fontweight='bold')
 plt.tight_layout()
 plt.savefig(f"{output_dir}/02_confusion_matrix.png", dpi=150, bbox_inches='tight')
 plt.close()
 print(f"  [Grafik: {output_dir}/02_confusion_matrix.png]")
 
 # ============================================================
-# KARŞILAŞTIRMA
+# ADIM 6B: KARŞILAŞTIRMA TABLOSU VE GRAFİK
 # ============================================================
 print("\n" + "=" * 70)
 print("  KARŞILAŞTIRMA TABLOSU")
@@ -244,7 +257,7 @@ for i, metric in enumerate(metrics):
 ax.set_xticks(x + width*1.5)
 ax.set_xticklabels(results_df['Model'])
 ax.set_ylabel('Skor (%)')
-ax.set_title('Model Karşılaştırması — Dropout UCI', fontsize=14, fontweight='bold')
+ax.set_title('Model Karşılaştırması — Student Habits', fontsize=14, fontweight='bold')
 ax.legend()
 ax.set_ylim(0, 110)
 plt.tight_layout()
@@ -260,19 +273,20 @@ print("  ADIM 7: En İyi Modeli Kaydet")
 print("=" * 70)
 
 best_model = optimized_models[best_model_name]
-model_path = "models/best_model_dropout.pkl"
+model_path = "models/best_model_habits.pkl"
 joblib.dump(best_model, model_path)
 print(f"  Model: {best_model_name}")
 print(f"  F1-Score: %{best_f1*100:.2f}")
 print(f"  Kaydedildi: {model_path}")
 
+# Feature importance (ağaç tabanlı modeller için)
 if hasattr(best_model, 'feature_importances_'):
     fi = pd.DataFrame({
         'Özellik': X.columns,
         'Önem': best_model.feature_importances_
     }).sort_values('Önem', ascending=True)
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(10, 6))
     ax.barh(fi['Özellik'], fi['Önem'], color='steelblue', edgecolor='black')
     ax.set_title(f'Feature Importance — {best_model_name}', fontsize=14, fontweight='bold')
     ax.set_xlabel('Önem')
@@ -282,5 +296,5 @@ if hasattr(best_model, 'feature_importances_'):
     print(f"  [Grafik: {output_dir}/04_feature_importance.png]")
 
 print("\n" + "=" * 70)
-print("  MODELLEME TAMAMLANDI — Dropout UCI")
+print("  MODELLEME TAMAMLANDI — Student Habits")
 print("=" * 70)
