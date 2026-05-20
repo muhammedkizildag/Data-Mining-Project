@@ -52,23 +52,23 @@ unzip-oulad:
 	unzip -o datasets/oulad/oulad.zip -d datasets/oulad
 
 preprocess:
-	$(PYTHON) preprocessing/preprocess_dropout.py
-	$(PYTHON) preprocessing/prepare_oulad.py
+	$(PYTHON) -m preprocessing.preprocess_dropout
+	$(PYTHON) -m preprocessing.prepare_oulad
 
 train: train-dropout train-oulad
 
 train-dropout:
-	$(PYTHON) modeling/model_dropout_localized.py
+	$(PYTHON) -m modeling.model_dropout_localized
 
 train-oulad:
-	$(PYTHON) modeling/model_oulad_v2.py
+	$(PYTHON) -m modeling.model_oulad_v2
 
 shap:
-	$(PYTHON) modeling/shap_dropout_localized.py
-	$(PYTHON) modeling/shap_oulad.py
+	$(PYTHON) -m modeling.shap_dropout_localized
+	$(PYTHON) -m modeling.shap_oulad
 
 chatbot-prep:
-	$(PYTHON) chatbot/prepare_chatbot.py
+	$(PYTHON) -m chatbot.prepare_chatbot
 
 chatbot:
 	streamlit run chatbot/app.py

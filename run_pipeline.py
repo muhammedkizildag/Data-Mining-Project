@@ -11,18 +11,18 @@ COMMANDS = {
         ["eda/eda_habits.py"],
     ],
     "preprocess": [
-        ["preprocessing/preprocess_dropout.py"],
-        ["preprocessing/prepare_oulad.py"],
+        ["-m", "preprocessing.preprocess_dropout"],
+        ["-m", "preprocessing.prepare_oulad"],
     ],
     "train": [
-        ["modeling/model_dropout_localized.py"],
-        ["modeling/model_oulad_v2.py"],
+        ["-m", "modeling.model_dropout_localized"],
+        ["-m", "modeling.model_oulad_v2"],
     ],
     "shap": [
-        ["modeling/shap_dropout_localized.py"],
-        ["modeling/shap_oulad.py"],
+        ["-m", "modeling.shap_dropout_localized"],
+        ["-m", "modeling.shap_oulad"],
     ],
-    "chatbot-prep": [["chatbot/prepare_chatbot.py"]],
+    "chatbot-prep": [["-m", "chatbot.prepare_chatbot"]],
     "test": [["-m", "unittest", "discover", "-s", "tests", "-v"]],
 }
 

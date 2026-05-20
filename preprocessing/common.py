@@ -1,4 +1,5 @@
 from pathlib import Path
+from zipfile import ZipFile
 
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
@@ -28,6 +29,15 @@ OULAD_TOP_ACTIVITIES = [
     "homepage",
     "questionnaire",
     "page",
+]
+OULAD_REQUIRED_FILES = [
+    "studentInfo.csv",
+    "assessments.csv",
+    "studentAssessment.csv",
+    "vle.csv",
+    "studentVle.csv",
+    "studentRegistration.csv",
+    "courses.csv",
 ]
 
 
@@ -62,6 +72,7 @@ def build_dropout_processed_frame(df):
 
 
 def load_oulad_tables(base_dir=OULAD_DIR):
+    ensure_oulad_tables_available(base_dir)
     return {
         "studentInfo": pd.read_csv(base_dir / "studentInfo.csv"),
         "assessments": pd.read_csv(base_dir / "assessments.csv"),
@@ -71,6 +82,22 @@ def load_oulad_tables(base_dir=OULAD_DIR):
         "studentRegistration": pd.read_csv(base_dir / "studentRegistration.csv"),
         "courses": pd.read_csv(base_dir / "courses.csv"),
     }
+
+
+def ensure_oulad_tables_available(base_dir=OULAD_DIR):
+    missing_files = [name for name in OULAD_REQUIRED_FILES if not (base_dir / name).exists()]
+    if not missing_files:
+        return
+
+    archive_path = base_dir / "oulad.zip"
+    if not archive_path.exists():
+        missing = ", ".join(missing_files)
+        raise FileNotFoundError(
+            f"OULAD dosyalari eksik: {missing}. Ayrica {archive_path} bulunamadi."
+        )
+
+    with ZipFile(archive_path) as archive:
+        archive.extractall(base_dir)
 
 
 def apply_oulad_target_mapping(student_info):

@@ -31,6 +31,7 @@ from modeling.common import (
 )
 
 OUTPUT_DIR = "modeling/plots_oulad_v2"
+CV_N_JOBS = -1
 ensure_dir(OUTPUT_DIR)
 
 TARGET_NAMES = ["Withdrawn", "Fail", "Pass"]
@@ -77,7 +78,7 @@ def build_model_searches(X_train, y_train):
         "model__n_neighbors": [1, 3, 5, 7, 9, 11, 13, 15],
         "model__metric": ["euclidean", "manhattan"],
     }
-    knn_grid = GridSearchCV(knn_pipe, knn_params, cv=kf, scoring="f1_macro", n_jobs=-1)
+    knn_grid = GridSearchCV(knn_pipe, knn_params, cv=kf, scoring="f1_macro", n_jobs=CV_N_JOBS)
     knn_grid.fit(X_train, y_train)
     print(f"  En iyi: {knn_grid.best_params_} → CV F1 (macro): %{knn_grid.best_score_ * 100:.2f}")
 
@@ -96,7 +97,7 @@ def build_model_searches(X_train, y_train):
         "model__min_samples_split": [2, 5, 10],
         "model__min_samples_leaf": [1, 2, 5],
     }
-    dt_grid = GridSearchCV(dt_pipe, dt_params, cv=kf, scoring="f1_macro", n_jobs=-1)
+    dt_grid = GridSearchCV(dt_pipe, dt_params, cv=kf, scoring="f1_macro", n_jobs=CV_N_JOBS)
     dt_grid.fit(X_train, y_train)
     print(f"  En iyi: {dt_grid.best_params_} → CV F1 (macro): %{dt_grid.best_score_ * 100:.2f}")
 
@@ -109,7 +110,7 @@ def build_model_searches(X_train, y_train):
         "model__max_depth": [5, 10, 15, 20, None],
         "model__min_samples_split": [2, 5, 10],
     }
-    rf_grid = GridSearchCV(rf_pipe, rf_params, cv=kf, scoring="f1_macro", n_jobs=-1)
+    rf_grid = GridSearchCV(rf_pipe, rf_params, cv=kf, scoring="f1_macro", n_jobs=CV_N_JOBS)
     rf_grid.fit(X_train, y_train)
     print(f"  En iyi: {rf_grid.best_params_} → CV F1 (macro): %{rf_grid.best_score_ * 100:.2f}")
 
@@ -123,7 +124,7 @@ def build_model_searches(X_train, y_train):
         "model__learning_rate": [0.01, 0.05, 0.1, 0.2],
         "model__subsample": [0.8, 1.0],
     }
-    xgb_grid = GridSearchCV(xgb_pipe, xgb_params, cv=kf, scoring="f1_macro", n_jobs=-1)
+    xgb_grid = GridSearchCV(xgb_pipe, xgb_params, cv=kf, scoring="f1_macro", n_jobs=CV_N_JOBS)
     xgb_grid.fit(X_train, y_train, model__sample_weight=sample_weights)
     print(f"  En iyi: {xgb_grid.best_params_} → CV F1 (macro): %{xgb_grid.best_score_ * 100:.2f}")
 

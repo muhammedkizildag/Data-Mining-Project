@@ -258,6 +258,51 @@ EDA grafikleri `eda/plots_habits/` (8 grafik) ve `eda/plots_dropout/` (7 grafik)
 
 Projenin son aşaması olarak bir chatbot planlandı. İki farklı yaklaşım değerlendirildi:
 
+---
+
+## Bakım ve Kalite İyileştirmeleri
+
+### 2026-05-15 — Pipeline Çalıştırma Hatası Düzeltildi
+
+Refactor sonrası `preprocessing` ve `modeling` script'leri paket içi import (`from preprocessing...`, `from modeling...`) kullanmaya başladı. Ancak `run_pipeline.py` ve `Makefile` bu script'leri doğrudan dosya yolu ile çağırıyordu. Bu yüzden gerçek çalıştırma sırasında `ModuleNotFoundError` oluştu.
+
+**Yapılan düzeltme:**
+- `run_pipeline.py` içindeki görevler modül çalıştırma biçimine geçirildi:
+  - `python -m preprocessing.preprocess_dropout`
+  - `python -m preprocessing.prepare_oulad`
+  - `python -m modeling.model_dropout_localized`
+  - `python -m modeling.model_oulad_v2`
+  - `python -m chatbot.prepare_chatbot`
+- `Makefile` hedefleri de aynı şekilde güncellendi.
+
+**Sonuç:**
+- Paket tabanlı mimari ile çalışma zamanı çağrıları uyumlu hale getirildi.
+- Refactor sonrası gözden kaçan gerçek runtime kırığı kapatıldı.
+
+### 2026-05-15 — OULAD Veri Hazırlama Dayanıklılığı Artırıldı
+
+Gerçek çalıştırma sırasında OULAD tarafı `studentVle.csv` eksik olduğu için kırıldı. Repoda `oulad.zip` vardı ama akış bu eksik parçayı otomatik tamamlamıyordu.
+
+**Yapılan düzeltme:**
+- `preprocessing/common.py` içine OULAD dosyalarının varlığını kontrol eden yardımcı eklendi.
+- Eksik CSV varsa ve `datasets/oulad/oulad.zip` mevcutsa dosyalar otomatik olarak zip'ten açılıyor.
+
+**Sonuç:**
+- Temiz checkout veya eksik veri dosyası senaryolarında preprocessing akışı daha dayanıklı hale geldi.
+- `make preprocess` ve `run_pipeline.py preprocess` artık manuel unzip adımına daha az bağımlı.
+
+### 2026-05-15 — Eğitim Kodunda Ortam Bağımlı Paralellik Sorunu Giderildi
+
+Gerçek eğitim çalıştırmasında `GridSearchCV(..., n_jobs=-1)` çağrıları bu ortamda `joblib` süreç başlatırken `PermissionError` üretti. Sorun model mantığında değil, süreç tabanlı paralellik varsayımındaydı.
+
+**Yapılan düzeltme:**
+- Aktif eğitim script'lerindeki `GridSearchCV` çağrıları tek işçi moduna (`n_jobs=1`) alındı.
+- XGBoost modeli de aynı nedenle `n_jobs=1` ile sınırlandı.
+
+**Sonuç:**
+- Eğitim akışı sandbox ve kısıtlı sistemlerde daha taşınabilir hale geldi.
+- Performans biraz daha yavaş olabilir, ancak çalışma güvenilirliği arttı.
+
 **Reddedilen:** Genel sohbet chatbotu (ChatGPT wrapper). Veri madenciliğiyle bağlantısı yok.
 
 **Kabul edilen:** Modelle entegre tahmin chatbotu. Öğrenci sohbet ederek kendi verilerini girer, eğitilmiş model arka planda çalışır, kişiselleştirilmiş sonuç döner.
