@@ -1,0 +1,90 @@
+{
+  "Marital status": {
+    "min": 1.0,
+    "max": 6.0
+  },
+  "Application mode": {
+    "min": 1.0,
+    "max": 57.0
+  },
+  "Application order": {
+    "min": 0.0,
+    "max": 9.0
+  },
+  "Course": {
+    "min": 33.0,
+    "max": 9991.0
+  },
+  "Previous qualification": {
+    "min": 1.0,
+    "max": 43.0
+  },
+  "Previous qualification (grade)": {
+    "min": 95.0,
+    "max": 190.0
+  },
+  "Mother's qualification": {
+    "min": 1.0,
+    "max": 44.0
+  },
+  "Father's qualification": {
+    "min": 1.0,
+    "max": 44.0
+  },
+  "Mother's occupation": {
+    "min": 0.0,
+    "max": 194.0
+  },
+  "Father's occupation": {
+    "min": 0.0,
+    "max": 195.0
+  },
+  "Admission grade": {
+    "min": 95.0,
+    "max": 190.0
+  },
+  "Gender": {
+    "min": 0.0,
+    "max": 1.0
+  },
+  "Scholarship holder": {
+    "min": 0.0,
+    "max": 1.0
+  },
+  "Age at enrollment": {
+    "min": 17.0,
+    "max": 70.0
+  },
+  "Curricular units 1st sem (enrolled)": {
+    "min": 0.0,
+    "max": 26.0
+  },
+  "Curricular units 1st sem (evaluations)": {
+    "min": 0.0,
+    "max": 45.0
+  },
+  "Curricular units 1st sem (approved)": {
+    "min": 0.0,
+    "max": 26.0
+  },
+  "Curricular units 1st sem (grade)": {
+    "min": 0.0,
+    "max": 18.875
+  },
+  "Curricular units 2nd sem (enrolled)": {
+    "min": 0.0,
+    "max": 23.0
+  },
+  "Curricular units 2nd sem (evaluations)": {
+    "min": 0.0,
+    "max": 33.0
+  },
+  "Curricular units 2nd sem (approved)": {
+    "min": 0.0,
+    "max": 20.0
+  },
+  "Curricular units 2nd sem (grade)": {
+    "min": 0.0,
+    "max": 18.571428571428573
+  }
+}

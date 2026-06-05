@@ -1,0 +1,31 @@
+class,rank,feature,mean_abs_shap
+Dropout,1,Curricular units 2nd sem (approved),0.12320829753340433
+Dropout,2,Curricular units 2nd sem (grade),0.06246925260617453
+Dropout,3,Curricular units 1st sem (approved),0.049869254505103176
+Dropout,4,Age at enrollment,0.03172877630411847
+Dropout,5,Course,0.01460194344186342
+Dropout,6,Curricular units 1st sem (grade),0.014091239448232809
+Dropout,7,Curricular units 2nd sem (evaluations),0.012520346496382395
+Dropout,8,Curricular units 2nd sem (enrolled),0.012332535979074948
+Dropout,9,Application mode,0.01208524637110201
+Dropout,10,Scholarship holder,0.011318104744640758
+Enrolled,1,Curricular units 2nd sem (approved),0.05573223148809129
+Enrolled,2,Curricular units 2nd sem (grade),0.03920314025487286
+Enrolled,3,Curricular units 1st sem (evaluations),0.030885786976382147
+Enrolled,4,Curricular units 1st sem (approved),0.02605440773848262
+Enrolled,5,Curricular units 2nd sem (evaluations),0.024312251516986797
+Enrolled,6,Age at enrollment,0.01770600852718958
+Enrolled,7,Curricular units 1st sem (grade),0.01586403593825067
+Enrolled,8,Scholarship holder,0.01469505320058313
+Enrolled,9,Curricular units 2nd sem (enrolled),0.011580535704225254
+Enrolled,10,Course,0.010154795291241456
+Graduate,1,Curricular units 2nd sem (approved),0.13036262026877687
+Graduate,2,Curricular units 1st sem (approved),0.06265668447502894
+Graduate,3,Curricular units 2nd sem (grade),0.04416647362852196
+Graduate,4,Curricular units 1st sem (evaluations),0.03499129694233012
+Graduate,5,Curricular units 1st sem (grade),0.027304177368629536
+Graduate,6,Scholarship holder,0.02597675624514685
+Graduate,7,Curricular units 2nd sem (evaluations),0.024889541033772323
+Graduate,8,Age at enrollment,0.018679762984513102
+Graduate,9,Course,0.01185663896743655
+Graduate,10,Application mode,0.01107604389336014
