@@ -278,7 +278,7 @@ Not:
 
 ## Chatbot
 
-Chatbot Streamlit ile çalışır ve Groq API üzerinden `llama-3.3-70b-versatile` modelini kullanır. LLM sohbetten yapılandırılmış öğrenci verisi çıkarır, bu veri `models/best_model_dropout_localized.pkl` dosyasındaki Pipeline'a (MinMaxScaler + XGBoost) ham olarak gönderilir. Normalizasyon Pipeline içinde otomatik yapılır.
+Chatbot Streamlit ile çalışır ve Groq API üzerinden `llama-3.3-70b-versatile` modelini kullanır. LLM sohbetten yapılandırılmış öğrenci verisi çıkarır, bu veri `models/best_model_dropout_localized.pkl` dosyasındaki seçilmiş final Pipeline modeline ham olarak gönderilir. Normalizasyon Pipeline içinde otomatik yapılır.
 
 ### API anahtarı
 
@@ -301,7 +301,7 @@ Chatbot akışı:
 1. Öğrenci doğal dille akademik durumunu anlatır.
 2. LLM mesajlardan model özelliklerini JSON formatında çıkarır.
 3. Eksik düşük öncelikli alanlar varsayılan değerlerle tamamlanır.
-4. XGBoost modeli Dropout / Enrolled / Graduate olasılıklarını üretir.
+4. Kayıtlı final model Dropout / Enrolled / Graduate olasılıklarını üretir.
 5. LLM sonucu yapıcı önerilerle öğrenciye açıklar.
 
 ## Model Sonuçları
@@ -314,7 +314,7 @@ Chatbotta kullanılan modeldir. Türkiye bağlamında doğrudan karşılığı z
 - `Debtor`
 - `Inflation rate`
 
-Optimizasyon `f1_macro` ile yapılır (her sınıfa eşit ağırlık). Decision Tree ve Random Forest `class_weight='balanced'`, XGBoost `sample_weight` kullanır. Model seçimi 10-fold CV Macro F1 skoruna göre yapılır, test seti sadece final raporlama için bir kez kullanılır.
+Optimizasyon `f1_macro` ile yapılır (her sınıfa eşit ağırlık). Güncel karşılaştırma kümesinde `kNN`, `Naive Bayes`, `Decision Tree`, `Random Forest`, `SVM`, `ExtraTrees`, `AdaBoost`, `XGBoost` ve `LightGBM` yer alır. `Decision Tree`, `Random Forest`, `ExtraTrees` ve `SVM` tarafında `class_weight='balanced'`, `XGBoost`, `LightGBM` ve `AdaBoost` tarafında `sample_weight` kullanılır. Model seçimi 10-fold CV Macro F1 skoruna göre yapılır; scriptler ayrıca `%70/%30` ve `%80/%20` holdout karşılaştırmalarını da yazdırır.
 
 10-Fold CV sonuçları:
 
@@ -346,7 +346,7 @@ models/dropout_localized_scaler_params.json # Scaler parametreleri (dokümantasy
 
 ### OULAD v2
 
-Aynı şekilde `f1_macro` optimizasyonu, `class_weight='balanced'` / `sample_weight` ve CV tabanlı model seçimi kullanılır.
+Aynı şekilde `f1_macro` optimizasyonu, genişletilmiş model kümesi (`kNN`, `Naive Bayes`, `Decision Tree`, `Random Forest`, `SVM`, `ExtraTrees`, `AdaBoost`, `XGBoost`, `LightGBM`) ve CV tabanlı model seçimi kullanılır.
 
 10-Fold CV sonuçları:
 

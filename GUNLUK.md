@@ -1877,3 +1877,121 @@ Son kontrolde chatbot tarafında iki gerçek regresyon tespit edildi:
 Bu düzeltmeyle chatbotun varsayılan girdileri yeniden modelin beklediği sayısal aralığa oturdu ve LLM/klavye kaynaklı aksansız kategorik girişler daha dayanıklı hale geldi.
 
 ---
+
+## Final Algoritma Genişletmesi — SVM, ExtraTrees, AdaBoost ve LightGBM Entegrasyonu (11 Haziran 2026)
+
+### Karar
+
+Final ödevi için istenen genişletilmiş yöntem setini mevcut tabular öğrenci başarı/terk hattına doğrudan uyarlama kararı alındı. Veri yapısı metin değil, yapılandırılmış öğrenci kaydı olduğu için yeni algoritmalar mevcut pipeline akışına eklendi.
+
+### Uygulanan Değişiklikler
+
+1. **Aktif modelleme hatları genişletildi**
+   - `modeling/model_dropout_localized.py`
+   - `modeling/model_oulad_v2.py`
+   dosyalarına `ExtraTrees`, `AdaBoost` ve koşullu `LightGBM` desteği eklendi.
+
+2. **SVM mevcut yeni setin parçası olarak korundu**
+   - Daha önce eklenmiş olan `SVM`, yeni final algoritma kümesinin bir parçası olarak bırakıldı.
+
+3. **Ağırlıklı fit gerektiren modeller için CV mantığı genelleştirildi**
+   - `modeling/common.py` içindeki çapraz doğrulama yardımcısı artık yalnızca `XGBoost` değil, `LightGBM` ve `AdaBoost` için de `sample_weight` ile özel fit akışını destekliyor.
+
+4. **Learning curve mantığı güncellendi**
+   - En iyi model `XGBoost`, `LightGBM` veya `AdaBoost` olduğunda öğrenme eğrisi üretiminde de örnek ağırlıkları kullanılacak şekilde güncelleme yapıldı.
+
+5. **Bağımlılık kaydı eklendi**
+   - `requirements.txt` dosyasına `lightgbm==4.6.0` eklendi.
+   - Ortamda paket kurulu değilse script çalışırken hata verip tamamen durmak yerine `LightGBM` adımı bilgilendirici mesajla atlanacak şekilde güvenli fallback bırakıldı.
+
+### Sonuç
+
+Bu adımla aktif karşılaştırma kümesi şu yapıya genişledi:
+- `kNN`
+- `Naive Bayes`
+- `Decision Tree`
+- `Random Forest`
+- `SVM`
+- `ExtraTrees`
+- `AdaBoost`
+- `XGBoost`
+- `LightGBM` (paket kuruluysa)
+
+Böylece final raporundaki yöntem bölümü için daha geniş ve veri tipine uygun bir algoritma ailesi hazırlandı.
+
+---
+
+## %80/%20 Holdout Karşılaştırması Kod Temizliği (11 Haziran 2026)
+
+### Problem
+
+İlk entegrasyondan sonra `%80/%20` split karşılaştırma bloğu iki aktif model dosyasının sonunda serbest kod olarak yer alıyordu. Bu yapı:
+- `OULAD` dosyasında gereksiz tekrar import içeriyordu,
+- `XGBoost`, `LightGBM` ve `AdaBoost` için `sample_weight` olmadan yeniden fit yapıyordu,
+- ortaklaştırılmadığı için bakım yükü yaratıyordu.
+
+### Düzeltme
+
+1. `modeling/common.py` içine `print_holdout_comparison(...)` yardımcısı eklendi.
+2. Bu yardımcı, ağırlıklı fit gerektiren modeller için `sample_weight` kullanacak şekilde tasarlandı.
+3. `modeling/model_dropout_localized.py` ve `modeling/model_oulad_v2.py` içindeki `%80/%20` bölümleri ortak yardımcıyı çağıracak şekilde sadeleştirildi.
+4. `model_oulad_v2.py` içindeki gereksiz metrics re-import kaldırıldı.
+
+### Sonuç
+
+`%80/%20` karşılaştırması korunmuş oldu; ancak artık hem metodolojik olarak daha tutarlı hem de kod kalitesi açısından daha temiz bir yapıya taşındı.
+
+---
+
+## GridSearch Paralellik Uyumluluğu Düzeltmesi (11 Haziran 2026)
+
+### Problem
+
+Gerçek eğitim çalıştırmasında `joblib/loky` çoklu süreç arka ucu bu masaüstü/sandbox ortamında sistem semafor sınırlarına erişmeye çalıştığı için `PermissionError` üretti. Bu hata model mantığından değil, paralel süreç başlatma altyapısından kaynaklandı.
+
+### Düzeltme
+
+- `modeling/model_dropout_localized.py`
+- `modeling/model_oulad_v2.py`
+
+içindeki `CV_N_JOBS` değeri `-1` yerine `1` olarak güncellendi.
+
+### Sonuç
+
+GridSearchCV artık tek süreçte çalışacak. Eğitim süresi bir miktar artsa da scriptler farklı ortamlarda daha kararlı ve taşınabilir hale geldi.
+
+---
+
+## Yeni Model Kümesi Hızlı Doğrulama ve Test Sonuçları (11 Haziran 2026)
+
+### Uygulanan Doğrulama
+
+Tam grid araması çok uzun sürdüğü için yeni eklenen modellerin entegrasyonunu hızlı ama gerçek veri üstünde çalışan bir doğrulama ile kontrol ettik. Dropout ve OULAD veri kümeleri üzerinde `SVM`, `ExtraTrees`, `AdaBoost`, `XGBoost` ve `LightGBM` için train/test split bazlı fit-predict denemesi yapıldı.
+
+### Hızlı Macro F1 Sonuçları
+
+Dropout veri kümesi:
+- `SVM`: `0.6554`
+- `ExtraTrees`: `0.6517`
+- `AdaBoost`: `0.6580`
+- `XGBoost`: `0.6992`
+- `LightGBM`: `0.6930`
+
+OULAD veri kümesi:
+- `SVM`: `0.7421`
+- `ExtraTrees`: `0.7325`
+- `AdaBoost`: `0.6825`
+- `XGBoost`: `0.7628`
+- `LightGBM`: `0.7655`
+
+### Ek Doğrulama
+
+- `lightgbm==4.6.0` kurulumu yapıldı.
+- `python3 -m unittest discover -s tests -v` çalıştırıldı.
+- Tüm `17` test başarılı geçti.
+
+### Sonuç
+
+Yeni algoritma entegrasyonu teknik olarak çalışıyor. Hızlı doğrulamada özellikle `XGBoost` ve `LightGBM` iki veri hattında da güçlü sonuç verdi. Tam grid araması ayrıca alınabilir; ancak mevcut aşamada kod bütünlüğü, bağımlılık kurulumu ve yeni model ailesinin çalışabilirliği doğrulanmış durumda.
+
+---

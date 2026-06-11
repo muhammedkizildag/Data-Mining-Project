@@ -6,10 +6,13 @@ import pandas as pd
 import seaborn as sns
 from sklearn.base import clone
 from sklearn.metrics import (
+    accuracy_score,
     auc,
     confusion_matrix,
     f1_score,
+    precision_score,
     precision_recall_curve,
+    recall_score,
     roc_curve,
     average_precision_score,
 )
@@ -220,9 +223,10 @@ def plot_learning_curve_custom(
 def evaluate_models_with_cv(optimized_models, X_train, y_train, cv):
     cv_results_macro = {}
     cv_results_weighted = {}
+    weighted_fit_models = {"XGBoost", "LightGBM", "AdaBoost"}
 
     for name, pipe in optimized_models.items():
-        if name == "XGBoost":
+        if name in weighted_fit_models:
             macro_scores = []
             weighted_scores = []
             for train_idx, val_idx in cv.split(X_train, y_train):
@@ -256,6 +260,34 @@ def evaluate_models_with_cv(optimized_models, X_train, y_train, cv):
         cv_results_weighted[name] = scores_weighted
 
     return cv_results_macro, cv_results_weighted
+
+
+def print_holdout_comparison(
+    optimized_models,
+    X_train,
+    X_test,
+    y_train,
+    y_test,
+    weighted_fit_models=None,
+):
+    weighted_fit_models = weighted_fit_models or set()
+
+    print(f"\n  {'Model':<20s}  {'Acc':>6}  {'Prec':>6}  {'Rec':>6}  {'F1-W':>6}  {'F1-M':>6}")
+    print("  " + "-" * 55)
+    for name, pipe in optimized_models.items():
+        pipe_clone = clone(pipe)
+        if name in weighted_fit_models:
+            fit_weights = compute_sample_weight("balanced", y_train)
+            pipe_clone.fit(X_train, y_train, model__sample_weight=fit_weights)
+        else:
+            pipe_clone.fit(X_train, y_train)
+        y_pred = pipe_clone.predict(X_test)
+        acc = accuracy_score(y_test, y_pred) * 100
+        prec = precision_score(y_test, y_pred, average="weighted", zero_division=0) * 100
+        rec = recall_score(y_test, y_pred, average="weighted", zero_division=0) * 100
+        f1w = f1_score(y_test, y_pred, average="weighted", zero_division=0) * 100
+        f1m = f1_score(y_test, y_pred, average="macro", zero_division=0) * 100
+        print(f"  {name:<20s}  {acc:>5.2f}%  {prec:>5.2f}%  {rec:>5.2f}%  {f1w:>5.2f}%  {f1m:>5.2f}%")
 
 
 def save_cv_boxplot(cv_results_macro, output_path, title):

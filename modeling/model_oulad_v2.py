@@ -1,6 +1,6 @@
 import joblib
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import AdaBoostClassifier, ExtraTreesClassifier, RandomForestClassifier
 from sklearn.feature_selection import mutual_info_classif
 from sklearn.metrics import (
     accuracy_score,
@@ -14,14 +14,21 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.utils.class_weight import compute_sample_weight
 from xgboost import XGBClassifier
+
+try:
+    from lightgbm import LGBMClassifier
+except ImportError:
+    LGBMClassifier = None
 
 from modeling.common import (
     build_cv_summary,
     ensure_dir,
     evaluate_models_with_cv,
+    print_holdout_comparison,
     plot_learning_curve_custom,
     plot_multiclass_roc_pr,
     save_confusion_matrix,
@@ -31,7 +38,8 @@ from modeling.common import (
 )
 
 OUTPUT_DIR = "modeling/plots_oulad_v2"
-CV_N_JOBS = -1
+CV_N_JOBS = 1
+SAMPLE_WEIGHT_MODELS = {"XGBoost", "LightGBM", "AdaBoost"}
 ensure_dir(OUTPUT_DIR)
 
 TARGET_NAMES = ["Withdrawn", "Fail", "Pass"]
@@ -114,6 +122,29 @@ def build_model_searches(X_train, y_train):
     rf_grid.fit(X_train, y_train)
     print(f"  En iyi: {rf_grid.best_params_} → CV F1 (macro): %{rf_grid.best_score_ * 100:.2f}")
 
+    print("\n  [ExtraTrees]")
+    et_pipe = Pipeline(
+        [("scaler", MinMaxScaler()), ("model", ExtraTreesClassifier(random_state=42, class_weight="balanced"))]
+    )
+    et_params = {
+        "model__n_estimators": [100, 200, 300],
+        "model__max_depth": [10, 20, None],
+        "model__min_samples_split": [2, 5, 10],
+    }
+    et_grid = GridSearchCV(et_pipe, et_params, cv=kf, scoring="f1_macro", n_jobs=CV_N_JOBS)
+    et_grid.fit(X_train, y_train)
+    print(f"  En iyi: {et_grid.best_params_} → CV F1 (macro): %{et_grid.best_score_ * 100:.2f}")
+
+    print("\n  [AdaBoost]")
+    ada_pipe = Pipeline([("scaler", MinMaxScaler()), ("model", AdaBoostClassifier(random_state=42))])
+    ada_params = {
+        "model__n_estimators": [50, 100, 200],
+        "model__learning_rate": [0.05, 0.1, 0.5, 1.0],
+    }
+    ada_grid = GridSearchCV(ada_pipe, ada_params, cv=kf, scoring="f1_macro", n_jobs=CV_N_JOBS)
+    ada_grid.fit(X_train, y_train, model__sample_weight=sample_weights)
+    print(f"  En iyi: {ada_grid.best_params_} → CV F1 (macro): %{ada_grid.best_score_ * 100:.2f}")
+
     print("\n  [XGBoost]")
     xgb_pipe = Pipeline(
         [("scaler", MinMaxScaler()), ("model", XGBClassifier(random_state=42, eval_metric="mlogloss", verbosity=0))]
@@ -128,13 +159,54 @@ def build_model_searches(X_train, y_train):
     xgb_grid.fit(X_train, y_train, model__sample_weight=sample_weights)
     print(f"  En iyi: {xgb_grid.best_params_} → CV F1 (macro): %{xgb_grid.best_score_ * 100:.2f}")
 
-    return {
+    lgbm_estimator = None
+    if LGBMClassifier is None:
+        print("\n  [LightGBM] Atlandı — paket kurulu değil. requirements.txt güncellendi.")
+    else:
+        print("\n  [LightGBM]")
+        lgbm_pipe = Pipeline(
+            [
+                ("scaler", MinMaxScaler()),
+                ("model", LGBMClassifier(random_state=42, verbose=-1, objective="multiclass")),
+            ]
+        )
+        lgbm_params = {
+            "model__n_estimators": [50, 100, 200],
+            "model__max_depth": [-1, 10, 20],
+            "model__learning_rate": [0.01, 0.05, 0.1],
+            "model__num_leaves": [31, 63],
+        }
+        lgbm_grid = GridSearchCV(lgbm_pipe, lgbm_params, cv=kf, scoring="f1_macro", n_jobs=CV_N_JOBS)
+        lgbm_grid.fit(X_train, y_train, model__sample_weight=sample_weights)
+        print(f"  En iyi: {lgbm_grid.best_params_} → CV F1 (macro): %{lgbm_grid.best_score_ * 100:.2f}")
+        lgbm_estimator = lgbm_grid.best_estimator_
+
+    print("\n  [SVM]")
+    svm_pipe = Pipeline(
+        [("scaler", MinMaxScaler()), ("model", SVC(random_state=42, class_weight="balanced", probability=True))]
+    )
+    svm_params = {
+        "model__C": [0.1, 1, 10],
+        "model__kernel": ["rbf", "linear"],
+        "model__gamma": ["scale", "auto"],
+    }
+    svm_grid = GridSearchCV(svm_pipe, svm_params, cv=kf, scoring="f1_macro", n_jobs=CV_N_JOBS)
+    svm_grid.fit(X_train, y_train)
+    print(f"  En iyi: {svm_grid.best_params_} → CV F1 (macro): %{svm_grid.best_score_ * 100:.2f}")
+
+    optimized_models = {
         "kNN": knn_grid.best_estimator_,
         "Naive Bayes": nb_pipe,
         "Decision Tree": dt_grid.best_estimator_,
         "Random Forest": rf_grid.best_estimator_,
+        "ExtraTrees": et_grid.best_estimator_,
+        "AdaBoost": ada_grid.best_estimator_,
         "XGBoost": xgb_grid.best_estimator_,
+        "SVM": svm_grid.best_estimator_,
     }
+    if lgbm_estimator is not None:
+        optimized_models["LightGBM"] = lgbm_estimator
+    return optimized_models
 
 
 df = pd.read_csv("preprocessing/oulad_processed.csv")
@@ -266,7 +338,7 @@ plot_learning_curve_custom(
     f"{OUTPUT_DIR}/05_learning_curve.png",
     f"Learning Curve — {best_model_name} (OULAD v2)",
     TARGET_NAMES,
-    use_sample_weight=best_model_name == "XGBoost",
+    use_sample_weight=best_model_name in SAMPLE_WEIGHT_MODELS,
 )
 print(f"  Learning curve kaydedildi: {OUTPUT_DIR}/05_learning_curve.png")
 
@@ -310,6 +382,23 @@ save_feature_importance(
     f"{OUTPUT_DIR}/04_feature_importance.png",
     f"Feature Importance — {best_model_name}",
     figsize=(10, 12),
+)
+
+print("\n" + "=" * 70)
+print("  %80/%20 SPLIT KARŞILAŞTIRMASI")
+print("=" * 70)
+X_train80, X_test20, y_train80, y_test20 = train_test_split(
+    X, y, test_size=0.20, random_state=42, stratify=y
+)
+print(f"  Train: {X_train80.shape[0]} satır | Test: {X_test20.shape[0]} satır")
+print("  Tüm modeller %80/%20 üzerinde değerlendiriliyor...")
+print_holdout_comparison(
+    optimized_models,
+    X_train80,
+    X_test20,
+    y_train80,
+    y_test20,
+    weighted_fit_models=SAMPLE_WEIGHT_MODELS,
 )
 
 print("\n" + "=" * 70)
